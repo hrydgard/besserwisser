@@ -93,6 +93,7 @@ struct Tensor {
 
 enum class LayerType {
 	UNDEFINED,
+	LINEAR,  // Just a set of weights (and later a regularizer?)
 	FC,  // Fully connected.
 	CONV,
 	POOL,  // Downsamples by 2x in X and Y but not Z
@@ -143,6 +144,11 @@ void ApplyLayer(const NeuralLayer &layer, const float *input) {
 		}
 		break;
 	}
+	case LayerType::LINEAR:
+		for (int i = 0; i < layer.numInputs; i++) {
+			layer.neurons[i] = input[i] * layer.weights[i];
+		}
+		break;
 	case LayerType::CONV:
 		break;
 	case LayerType::POOL:
@@ -160,17 +166,6 @@ void RunNetwork(NeuralNetwork &network) {
 	}
 }
 
-void GetLabel(NeuralLayer &layer) {
-	float maxValue = -INFINITY;
-	int label = -1;
-	for (int i = 0; i < layer.numNeurons; i++) {
-		if (layer.neurons[i] > maxValue) {
-			label = i;
-			maxValue = layer.neurons[i];
-		}
-	}
-}
-
 void InitializeNetwork(NeuralNetwork &network) {
 	for (int i = 1; i < network.layers.size(); i++) {
 		NeuralLayer &layer = *network.layers[i];
@@ -180,6 +175,9 @@ void InitializeNetwork(NeuralNetwork &network) {
 		case LayerType::FC:
 			layer.biases = new float[layer.numNeurons]{};
 			layer.weights = new float[layer.numNeurons * layer.numInputs]{};
+			break;
+		case LayerType::LINEAR:
+			layer.weights = new float[layer.numInputs]{};
 			break;
 		case LayerType::RELU:
 			assert(layer.numNeurons == layer.numInputs);
@@ -209,6 +207,19 @@ float ComputeSoftMaxLoss(const float *data, size_t size, int correctLabel) {
 	}
 	float normalized = expf(data[correctLabel]) / sumExp;
 	return -logf(normalized);
+}
+
+// argmax(data[i], i)
+int Judge(const float *data, size_t size) {
+	float maxValue = 0.0f;
+	int argmax = -1;
+	for (size_t i = 0; i < size; i++) {
+		if (data[i] > maxValue) {
+			argmax = (int)i;
+			maxValue = data[i];
+		}
+	}
+	return argmax;
 }
 
 /*
@@ -270,9 +281,6 @@ std::vector<uint8_t> LoadMNISTLabels(std::string path) {
 }
 
 int main() {
-	float data[3] = { 3.2, 5.1, -1.7 };
-	float loss = ComputeSoftMaxLoss(data, 3, 0);
-
 	auto trainImages = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
 	auto trainLabels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
 	assert(trainImages.size() == trainLabels.size());
@@ -314,6 +322,7 @@ int main() {
 		assert(imageLayer.numNeurons == trainImages[i].size);
 		imageLayer.neurons = trainImages[i].data;
 		RunNetwork(network);
+		// int inferredLabel = Judge(fcLayer.neurons, 10);
 		float loss = network.lossFunction(fcLayer.neurons, 10, trainLabels[i]);
 		totalLoss += loss;
 	}
