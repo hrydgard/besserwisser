@@ -1,104 +1,22 @@
-﻿// SimpleNet.cpp : Defines the entry point for the console application.
-//
-
-#include "stdafx.h"
-
-#include <cmath>
+﻿#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <cstdio>
 
-struct ivec3 {
-	int x, y, z;
-};
-
-struct DataVector {
-	~DataVector() {
-		delete[] data;
-	}
-	// Probably quite useless.
-	void SetToClassification(int x, size_t count) {
-		if (size != count) {
-			delete[] data;
-			size = count;
-			data = new float[count] {};
-		} else {
-			std::fill(data, data + count, 0.0f);
-		}
-		data[x] = 1.0f;
-	}
-	float *data = nullptr;
-	size_t size = 0;
-	ivec3 dim{};  // Dimensions the data should be interpreted at. Will tag along on the ride.
-};
-
-inline float RELU(float x) {
-	return x > 0.0f ? x : 0.0f;
-}
-
-inline float ByteToFloat(uint8_t b) {
-	return (float)b * (1.0f / 255.0f);
-}
-
-// TODO: SSE2 it up.
-inline float Dot(const float *a, const float *b, size_t size) {
-	float sum = 0.0f;
-	for (size_t i = 0; i < size; i++) {
-		sum += a[i] * b[i];
-	}
-	return sum;
-}
-
-inline uint32_t swap32(uint32_t x) {
-	return _byteswap_ulong(x);
-}
-
-inline uint32_t readBE32(FILE *f) {
-	uint32_t x;
-	fread(&x, 1, 4, f);
-	return swap32(x);
-}
-
-struct Tensor {
-	Tensor() : w(0), h(0), d(0), data(nullptr) {}
-	Tensor(int _w, int _h, int _d) : w(_w), h(_h), d(_d) {
-		data = new float[w * h * d];
-	}
-	~Tensor() {
-		delete[] data;
-	}
-
-	void operator=(Tensor &&tensor) {
-		delete[] data;
-		data = tensor.data;
-		w = tensor.w;
-		h = tensor.h;
-		d = tensor.d;
-	}
-	Tensor(Tensor&& tensor) noexcept : data(tensor.data), w(tensor.w), h(tensor.h), d(tensor.d) {}
-
-	int GetDataSize() const {
-		return w * h * d;
-	}
-
-	int w, h, d;
-	float *data;
-
-	float &At(int x, int y, int z) {
-		return data[z * w * h + y * w + x];
-	}
-};
+#include "math_util.h"
+#include "mnist.h"
 
 enum class LayerType {
 	UNDEFINED,
-	LINEAR,  // Just a set of weights (and later a regularizer?)
-	FC,  // Fully connected.
+	FC,  // Fully connected. Same as a regular linear classifier matrix.
 	CONV,
 	POOL,  // Downsamples by 2x in X and Y but not Z
-	RELU,
+	RELU,  // Best non-linearity.
 	IMAGE,  // Doesn't do anything, just a static image.
+	SOFTMAX,
+	SVM,
 };
 
 typedef float(*LossFunction)(const float *data, size_t size, int correctLabel);
@@ -109,12 +27,12 @@ struct NeuralLayer {
 
 	int numInputs = 0;
 	int numNeurons = 0;
+	int numWeights = 0;  // for convenience.
 
 	// Trained:
 	float *weights = nullptr;  // Matrix (inputs * neurons)
-	float *biases = nullptr;   // Vector. Same size as neurons.
-
 	float *neurons = nullptr;  // Vector.
+
 };
 
 struct NeuralNetwork {
@@ -122,32 +40,26 @@ struct NeuralNetwork {
 	LossFunction lossFunction;
 };
 
-struct TrainingSet {
-	
-};
-
 // Layers own their own outputs.
-void ApplyLayer(const NeuralLayer &layer, const float *input) {
+void Forward(const NeuralLayer &layer, const float *input) {
 	Tensor output;
 	switch (layer.type) {
 	case LayerType::RELU: {
 		size_t sz = output.GetDataSize();
 		for (int i = 0; i < layer.numInputs; i++) {
-			layer.neurons[i] = RELU(input[i]);
+			layer.neurons[i] = std::max(0.0f, input[i]);
 		}
 		break;
 	}
 	case LayerType::FC: {
-		// Essentially a matrix multiplication and a vector addition.
+		// Just a matrix*vector multiplication.
 		for (int y = 0; y < layer.numNeurons; y++) {
-			layer.neurons[y] = Dot(input, &layer.weights[y * layer.numInputs], layer.numInputs) + layer.biases[y];
+			layer.neurons[y] = DotSSE(input, &layer.weights[y * layer.numInputs], layer.numInputs);
 		}
 		break;
 	}
-	case LayerType::LINEAR:
-		for (int i = 0; i < layer.numInputs; i++) {
-			layer.neurons[i] = input[i] * layer.weights[i];
-		}
+	case LayerType::SOFTMAX:
+		
 		break;
 	case LayerType::CONV:
 		break;
@@ -159,10 +71,17 @@ void ApplyLayer(const NeuralLayer &layer, const float *input) {
 	}
 }
 
+void Backward(const NeuralLayer &layer, const float *gradients) {
+	switch (layer.type) {
+	case LayerType::RELU:
+		break;
+	}
+}
+
 // Inference.
 void RunNetwork(NeuralNetwork &network) {
 	for (int i = 1; i < network.layers.size(); i++) {
-		ApplyLayer(*network.layers[i], network.layers[i - 1]->neurons);
+		Forward(*network.layers[i], network.layers[i - 1]->neurons);
 	}
 }
 
@@ -173,16 +92,18 @@ void InitializeNetwork(NeuralNetwork &network) {
 		layer.neurons = new float[layer.numNeurons];
 		switch (layer.type) {
 		case LayerType::FC:
-			layer.biases = new float[layer.numNeurons]{};
-			layer.weights = new float[layer.numNeurons * layer.numInputs]{};
-			break;
-		case LayerType::LINEAR:
-			layer.weights = new float[layer.numInputs]{};
+			layer.numWeights = layer.numNeurons * layer.numInputs;
+			layer.weights = new float[layer.numWeights]{};
+			GaussianNoise(layer.weights, layer.numWeights);
 			break;
 		case LayerType::RELU:
 			assert(layer.numNeurons == layer.numInputs);
 			break;
 		case LayerType::IMAGE:
+			break;
+		case LayerType::SOFTMAX:
+		case LayerType::SVM:
+			assert(layer.numNeurons == layer.numInputs);
 			break;
 		}
 	}
@@ -222,117 +143,147 @@ int Judge(const float *data, size_t size) {
 	return argmax;
 }
 
-/*
-Tensor LoadImageAsTensor(std::string path, bool monochrome) {
-	FILE *f = fopen(path.c_str(), "rb");
-	int w, h, comp;
-	stbi_uc *data = stbi_load_from_file(f, &w, &h, &comp, 3);
+struct DataSet {
+	std::vector<DataVector> images;
+	std::vector<uint8_t> labels;
+};
 
-	// TODO: Load all three channels.
-	Tensor tensor(w, h, 1);
-	for (int y = 0; y < h; y++) {
-		for (int x = 0; x < w; x++) {
-			tensor.At(x, y, 0) = ByteToFloat(data[(y * w + h) * 3]);
-		}
-	}
-}*/
+struct Subset {
+	DataSet *dataSet;
+	std::vector<int> indices;
+};
 
-std::vector<DataVector> LoadMNISTImages(std::string path) {
-	FILE *f = fopen(path.c_str(), "rb");
-	if (!f)
-		throw;
-	uint32_t magic = readBE32(f);
-	if (magic != 0x803) {
-		return std::vector<DataVector>();
+float ComputeLoss(NeuralNetwork &network, const Subset &subset) {
+	assert(network.layers[0]->type == LayerType::IMAGE);
+
+	NeuralLayer *finalLayer = network.layers.back();
+	// Evaluate network on parts of training set, compute gradients, update weights, backpropagate.
+	float totalLoss = 0.0f;
+	auto &images = subset.dataSet->images;
+	auto &labels = subset.dataSet->labels;
+	for (int i = 0; i < images.size(); i++) {
+		int index = subset.indices[i];
+		network.layers[0]->neurons = images[index].data;
+		RunNetwork(network);
+		float loss = network.lossFunction(finalLayer->neurons, finalLayer->numNeurons, labels[index]);
+		totalLoss += loss;
 	}
-	int imageCount = readBE32(f);
-	std::vector<DataVector> images(imageCount);
-	int rows = readBE32(f);
-	int cols = readBE32(f);
-	uint8_t *temp = new uint8_t[rows * cols];
-	for (int i = 0; i < imageCount; i++) {
-		DataVector &image = images[i];
-		fread(temp, 1, rows*cols, f);
-		image.data = new float[rows * cols];
-		for (int j = 0; j < rows*cols; j++) {
-			image.data[j] = ByteToFloat(temp[j]);
-		}
-		image.size = rows * cols;
-		image.dim = { cols, rows, 1 };
-	}
-	delete[] temp;
-	fclose(f);
-	return images;
+	totalLoss /= subset.indices.size();
+	return totalLoss;
 }
 
-std::vector<uint8_t> LoadMNISTLabels(std::string path) {
-	FILE *f = fopen(path.c_str(), "rb");
-	if (!f)
-		throw;
-	uint32_t magic = readBE32(f);
-	uint32_t count = readBE32(f);
-	if (magic != 0x801) {
-		return std::vector<uint8_t>();
+void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float *gradient) {
+	const float diff = 0.0001f;
+	const float inv2Diff = 1.0f / (2.0 * diff);
+	NeuralLayer &layer = *network.layers[layerIndex];
+	size_t size = layer.numWeights;
+	for (int i = 0; i < size; i++) {
+		float origWeight = layer.weights[i];
+		// Tweak up and compute loss
+		layer.weights[i] = origWeight + diff;
+		float up = ComputeLoss(network, subset);
+		// Tweak down and compute
+		layer.weights[i] = origWeight - diff;
+		float down = ComputeLoss(network, subset);
+		// Restore and compute gradient.
+		layer.weights[i] = origWeight;
+		gradient[i] = up - down;
 	}
-	std::vector<uint8_t> data(count);
-	fread(data.data(), 1, count, f);
-	fclose(f);
-	return data;
 }
+
+void UpdateLayerBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float speed) {
+	NeuralLayer &layer = *network.layers[layerIndex];
+	size_t size = layer.numWeights;
+	float *gradient = new float[size];
+	ComputeGradientBruteForce(network, subset, layerIndex, gradient);
+	// Simple gradient descent.
+	// Can be expressed as an axpy
+	for (int i = 0; i < size; i++) {
+		layer.weights[i] -= gradient[i] * speed;
+	}
+}
+
+// simple architectures:
+
+// INPUT -> FC -> RELU -> FC -> RELU -> FC
+// INPUT -> FC -> RELU -> FC
+// INPUT -> FC
 
 int main() {
-	auto trainImages = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
-	auto trainLabels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
-	assert(trainImages.size() == trainLabels.size());
+	DataSet trainingSet;
+	trainingSet.images = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
+	trainingSet.labels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
+	assert(trainingSet.images.size() == trainingSet.images.size());
 
-	auto testImages = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
-	auto testLabels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
-	assert(testImages.size() == testLabels.size());
+	DataSet testSet;
+	testSet.images = LoadMNISTImages("C:/dev/MNIST/t10k-images.idx3-ubyte");
+	testSet.labels = LoadMNISTLabels("C:/dev/MNIST/t10k-labels.idx1-ubyte");
+	assert(testSet.images.size() == testSet.images.size());
 
 	NeuralNetwork network;
 	NeuralLayer imageLayer{ LayerType::IMAGE, ivec3{ 28, 28, 1 } };
 	imageLayer.numInputs = 0;
-	imageLayer.numNeurons = 28 * 28;
+	imageLayer.numNeurons = 28 * 28 + 1;  // + 1 for bias trick
+	network.layers.push_back(&imageLayer);
 
+	/*
 	NeuralLayer hiddenLayer{ LayerType::FC, ivec3{100,1,1} };
 	hiddenLayer.numInputs = 28 * 28;
 	hiddenLayer.numNeurons = 100;
+	network.layers.push_back(&hiddenLayer);
 
 	NeuralLayer relu{ LayerType::RELU };
 	relu.numInputs = 100;
 	relu.numNeurons = 100;
+	network.layers.push_back(&relu);
 
 	NeuralLayer fcLayer{ LayerType::FC, ivec3{ 32,32,1 } };
 	fcLayer.numInputs = 100;
 	fcLayer.numNeurons = 10;
-
-	network.layers.push_back(&imageLayer);
-	network.layers.push_back(&hiddenLayer);
-	network.layers.push_back(&relu);
 	network.layers.push_back(&fcLayer);
+	*/
+	NeuralLayer linearLayer{ LayerType::FC };
+	linearLayer.numInputs = 28 * 28 + 1;
+	linearLayer.numNeurons = 10;
+	network.layers.push_back(&linearLayer);
+
+	NeuralLayer *finalLayer = network.layers.back();
 	network.lossFunction = &ComputeSVMLoss;
 
 	InitializeNetwork(network);
 
 	static const char *labelNames[10] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 
-	// Evaluate network on the full training set.
+	int subsetSize = 32;
+	
+	std::vector<std::vector<int>> subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
+
+	Subset subset;
+	subset.dataSet = &trainingSet;
+	subset.indices = subsets[0];
+
+	float loss = ComputeLoss(network, subset);
+
+	UpdateLayerBruteForce(network, subset, 1, 0.01f);
+
+	float lossAfterTraining = ComputeLoss(network, subset);
+
+	printf("Loss before: %0.3f\n", loss);
+	printf("Loss after: %0.3f\n", lossAfterTraining);
+
+	while (true);
+	/*
+	// Evaluate network on the test set.
 	float totalLoss = 0.0f;
-	for (int i = 0; i < trainImages.size(); i++) {
-		assert(imageLayer.numNeurons == trainImages[i].size);
-		imageLayer.neurons = trainImages[i].data;
+	for (int i = 0; i < testImages.size(); i++) {
+		assert(imageLayer.numNeurons == testImages[i].size);
+		imageLayer.neurons = testImages[i].data;
 		RunNetwork(network);
 		// int inferredLabel = Judge(fcLayer.neurons, 10);
-		float loss = network.lossFunction(fcLayer.neurons, 10, trainLabels[i]);
+		float loss = network.lossFunction(fcLayer.neurons, 10, testLabels[i]);
 		totalLoss += loss;
 	}
-	totalLoss /= trainLabels.size( );
-
-	printf("Total loss: %0.1f\n", totalLoss);
-	
-	// Test
-	for (int i = 0; i < testImages.size(); i++) {
-
-	}
+	totalLoss /= trainLabels.size();
+	*/
 	return 0;
 }
