@@ -37,12 +37,12 @@ void FloatNoise(float *data, size_t size, float scale, float bias) {
 	}
 }
 
-void GaussianNoise(float *data, size_t size) {
+void GaussianNoise(float *data, size_t size, float scale) {
 	std::random_device rd{};
 	std::mt19937 gen{ rd() };
 	std::normal_distribution<float> normal;
 	for (size_t i = 0; i < size; i++) {
-		data[i] = normal(gen);
+		data[i] = normal(gen) * scale;
 	}
 }
 

@@ -94,7 +94,7 @@ void InitializeNetwork(NeuralNetwork &network) {
 		case LayerType::FC:
 			layer.numWeights = layer.numNeurons * layer.numInputs;
 			layer.weights = new float[layer.numWeights]{};
-			GaussianNoise(layer.weights, layer.numWeights);
+			GaussianNoise(layer.weights, layer.numWeights, 0.05f);
 			break;
 		case LayerType::RELU:
 			assert(layer.numNeurons == layer.numInputs);
@@ -181,7 +181,17 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 			}
 		}
 	}
-	// TODO: Add regularization term to discourage high volume noise in the matrix.
+	// Subtract regularization term 0.5lambdaX^2 to discourage high volume noise in the matrix.
+	// Note that its gradient will be simply -X.
+	float regStrength = 0.5f;
+	float regSum = 0.0f;
+	for (size_t i = 0; i < network.layers.size(); i++) {
+		NeuralLayer &layer = *network.layers[i];
+		for (size_t j = 0; j < layer.numWeights; j++) {
+			regSum += 0.5f * regStrength * sqr(layer.weights[j]);
+		}
+	}
+	totalLoss += regSum;
 	totalLoss /= subset.indices.size();
 	return totalLoss;
 }
@@ -291,7 +301,7 @@ int main() {
 
 	float trainingSpeed = 0.05f;
 
-	int rounds = 400;
+	int rounds = 40;
 	for (int i = 0; i < rounds; i++) {
 		printf("Round %d/%d\n", i + 1, rounds);
 		// Train on different subsets each round (stochastic gradient descent)

@@ -23,9 +23,13 @@ inline float Dot(const float *a, const float *b, size_t size) {
 float DotSSE(const float *a, const float *b, size_t size);
 
 void FloatNoise(float *data, size_t size, float scale = 1.0f, float bias = 0.0f);
-void GaussianNoise(float *data, size_t size);
+void GaussianNoise(float *data, size_t size, float scale);  // Centered around 0 with unit stddev before scaling.
 
 void PrintFloatVector(const char *name, const float *x, size_t size, int maxSize = 10);
+
+inline float sqr(float x) {
+	return x * x;
+}
 
 inline uint32_t swap32(uint32_t x) {
 	return _byteswap_ulong(x);
