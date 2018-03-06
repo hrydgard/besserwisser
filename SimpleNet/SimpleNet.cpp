@@ -153,7 +153,12 @@ struct Subset {
 	std::vector<int> indices;
 };
 
-float ComputeLoss(NeuralNetwork &network, const Subset &subset) {
+struct RunStats {
+	int correct;
+	int wrong;
+};
+
+float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats = nullptr) {
 	assert(network.layers[0]->type == LayerType::IMAGE);
 
 	NeuralLayer *finalLayer = network.layers.back();
@@ -161,13 +166,22 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset) {
 	float totalLoss = 0.0f;
 	auto &images = subset.dataSet->images;
 	auto &labels = subset.dataSet->labels;
-	for (int i = 0; i < images.size(); i++) {
+	for (int i = 0; i < subset.indices.size(); i++) {
 		int index = subset.indices[i];
 		network.layers[0]->neurons = images[index].data;
 		RunNetwork(network);
 		float loss = network.lossFunction(finalLayer->neurons, finalLayer->numNeurons, labels[index]);
 		totalLoss += loss;
+		if (stats) {
+			int label = Judge(finalLayer->neurons, finalLayer->numNeurons);
+			if (label == labels[index]) {
+				stats->correct++;
+			} else {
+				stats->wrong++;
+			}
+		}
 	}
+	// TODO: Add regularization term to discourage high volume noise in the matrix.
 	totalLoss /= subset.indices.size();
 	return totalLoss;
 }
@@ -187,8 +201,10 @@ void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int
 		float down = ComputeLoss(network, subset);
 		// Restore and compute gradient.
 		layer.weights[i] = origWeight;
-		gradient[i] = up - down;
+		gradient[i] = (up - down) * inv2Diff;
 	}
+	PrintFloatVector("Weights", layer.weights, size, 10);
+	PrintFloatVector("Gradient", gradient + size / 2 - 10, size/2, 10);
 }
 
 void UpdateLayerBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float speed) {
@@ -248,7 +264,7 @@ int main() {
 	network.layers.push_back(&linearLayer);
 
 	NeuralLayer *finalLayer = network.layers.back();
-	network.lossFunction = &ComputeSVMLoss;
+	network.lossFunction = &ComputeSoftMaxLoss;
 
 	InitializeNetwork(network);
 
@@ -258,19 +274,48 @@ int main() {
 	
 	std::vector<std::vector<int>> subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
 
+	RunStats stats;
+
+	Subset testSubset;
+	testSubset.dataSet = &testSet;
+	testSubset.indices = GetFullSet(testSubset.dataSet->images.size());
+
+	stats = {};
+	float lossOnTestset = ComputeLoss(network, testSubset, &stats);
+	printf("Loss on testset before training: %f", lossOnTestset);
+	printf("Results: %d correct, %d wrong\n", stats.correct, stats.wrong);
+
 	Subset subset;
 	subset.dataSet = &trainingSet;
 	subset.indices = subsets[0];
 
-	float loss = ComputeLoss(network, subset);
+	float trainingSpeed = 0.05f;
 
-	UpdateLayerBruteForce(network, subset, 1, 0.01f);
+	int rounds = 400;
+	for (int i = 0; i < rounds; i++) {
+		printf("Round %d/%d\n", i + 1, rounds);
+		// Train on different subsets each round (stochastic gradient descent)
+		subset.indices = subsets[i % subsets.size()];
+		float loss = ComputeLoss(network, subset);
 
-	float lossAfterTraining = ComputeLoss(network, subset);
+		UpdateLayerBruteForce(network, subset, 1, trainingSpeed);
 
-	printf("Loss before: %0.3f\n", loss);
-	printf("Loss after: %0.3f\n", lossAfterTraining);
+		stats = {};
+		float lossAfterTraining = ComputeLoss(network, subset, &stats);
+		PrintFloatVector("Neurons", network.layers.back()->neurons, network.layers.back()->numNeurons);
+		printf("Loss before: %0.3f\n", loss);
+		printf("Loss after: %0.3f\n", lossAfterTraining);
+		printf("Results: %d correct, %d wrong\n", stats.correct, stats.wrong);
+	}
 
+	printf("Done.");
+	
+	printf("Running on testset (%d images)...", (int)testSubset.dataSet->images.size());
+	stats = {};
+	lossOnTestset = ComputeLoss(network, testSubset, &stats);
+	printf("Loss on testset: %f", lossOnTestset);
+	printf("Results: %d correct, %d wrong\n", stats.correct, stats.wrong);
+	
 	while (true);
 	/*
 	// Evaluate network on the test set.

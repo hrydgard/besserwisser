@@ -55,11 +55,26 @@ std::vector<std::vector<int>> GenerateRandomSubsets(int count, int setSize) {
 
 	int setCount = count / setSize;
 	std::vector<std::vector<int>> sets(setCount);
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < setCount; i++) {
 		sets[i].reserve(setSize);
 		for (int j = 0; j < setSize; j++) {
 			sets[i].push_back(all[i * setSize + j]);
 		}
 	}
 	return sets;
+}
+
+void PrintFloatVector(const char *name, const float *x, size_t size, int maxSize) {
+	printf("%s: (", name);
+	for (int i = 0; i < size; i++) {
+		if (i != size - 1) {
+			printf("%0.5f, ", x[i]);
+			if (i >= maxSize) {
+				printf("... / %d)\n", (int)size);
+				return;
+			}
+		} else {
+			printf("%0.5f)\n", x[i]);
+		}
+	}
 }

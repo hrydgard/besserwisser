@@ -25,6 +25,8 @@ float DotSSE(const float *a, const float *b, size_t size);
 void FloatNoise(float *data, size_t size, float scale = 1.0f, float bias = 0.0f);
 void GaussianNoise(float *data, size_t size);
 
+void PrintFloatVector(const char *name, const float *x, size_t size, int maxSize = 10);
+
 inline uint32_t swap32(uint32_t x) {
 	return _byteswap_ulong(x);
 }
@@ -87,7 +89,7 @@ struct DataVector {
 
 std::vector<std::vector<int>> GenerateRandomSubsets(int count, int setSize);
 
-inline std::vector<int> GetFullSet(int count, int setSize) {
+inline std::vector<int> GetFullSet(int count) {
 	std::vector<int> all;
 	all.reserve(count);
 	for (int i = 0; i < count; i++) {
