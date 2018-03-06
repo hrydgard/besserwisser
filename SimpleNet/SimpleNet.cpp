@@ -274,7 +274,7 @@ int main() {
 	network.layers.push_back(&linearLayer);
 
 	NeuralLayer *finalLayer = network.layers.back();
-	network.lossFunction = &ComputeSoftMaxLoss;
+	network.lossFunction = &ComputeSVMLoss;
 
 	InitializeNetwork(network);
 
