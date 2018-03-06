@@ -79,7 +79,7 @@ void Backward(const NeuralLayer &layer, const float *gradients) {
 }
 
 // Inference.
-void RunNetwork(NeuralNetwork &network) {
+void RunForwardPass(NeuralNetwork &network) {
 	for (int i = 1; i < network.layers.size(); i++) {
 		Forward(*network.layers[i], network.layers[i - 1]->neurons);
 	}
@@ -161,6 +161,8 @@ struct RunStats {
 float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats = nullptr) {
 	assert(network.layers[0]->type == LayerType::IMAGE);
 
+	float regStrength = 0.5f;
+
 	NeuralLayer *finalLayer = network.layers.back();
 	// Evaluate network on parts of training set, compute gradients, update weights, backpropagate.
 	float totalLoss = 0.0f;
@@ -169,7 +171,7 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 	for (int i = 0; i < subset.indices.size(); i++) {
 		int index = subset.indices[i];
 		network.layers[0]->neurons = images[index].data;
-		RunNetwork(network);
+		RunForwardPass(network);
 		float loss = network.lossFunction(finalLayer->neurons, finalLayer->numNeurons, labels[index]);
 		totalLoss += loss;
 		if (stats) {
@@ -180,20 +182,24 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 				stats->wrong++;
 			}
 		}
-	}
-	// Subtract regularization term 0.5lambdaX^2 to discourage high volume noise in the matrix.
-	// Note that its gradient will be simply -X.
-	float regStrength = 0.5f;
-	float regSum = 0.0f;
-	for (size_t i = 0; i < network.layers.size(); i++) {
-		NeuralLayer &layer = *network.layers[i];
-		for (size_t j = 0; j < layer.numWeights; j++) {
-			regSum += 0.5f * regStrength * sqr(layer.weights[j]);
+
+		// Penalize with regularization term 0.5lambdaX^2 to discourage high volume noise in the matrix.
+		// Note that its gradient will be simply lambdaX.
+		double regSum = 0.0;
+		for (size_t i = 0; i < network.layers.size(); i++) {
+			NeuralLayer &layer = *network.layers[i];
+			for (size_t j = 0; j < layer.numWeights; j++) {
+				regSum += 0.5f * regStrength * sqr(layer.weights[j]);
+			}
 		}
+		totalLoss += (float)regSum;
 	}
-	totalLoss += regSum;
 	totalLoss /= subset.indices.size();
 	return totalLoss;
+}
+
+void ComputeGradientSVM(NeuralNetwork &network, const Subset &subset, int layerIndex, float *gradient) {
+
 }
 
 void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float *gradient) {

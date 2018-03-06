@@ -13,14 +13,16 @@ inline float hsum_ps_sse3(__m128 v) {
 float DotSSE(const float *a, const float *b, size_t size) {
 	float sum;
 	if (size >= 16) {
-		__m128 sumWide = _mm_setzero_ps();
-		while (size >= 4) {
-			sumWide = _mm_add_ps(sumWide, _mm_mul_ps(_mm_loadu_ps(a), _mm_loadu_ps(b)));
-			a += 4;
-			b += 4;
-			size -= 4;
+		__m128 sumWide1 = _mm_setzero_ps();
+		__m128 sumWide2 = _mm_setzero_ps();
+		while (size >= 8) {
+			sumWide1 = _mm_add_ps(sumWide1, _mm_mul_ps(_mm_loadu_ps(a), _mm_loadu_ps(b)));
+			sumWide2 = _mm_add_ps(sumWide2, _mm_mul_ps(_mm_loadu_ps(a + 4), _mm_loadu_ps(b + 4)));
+			a += 8;
+			b += 8;
+			size -= 8;
 		}
-		sum = hsum_ps_sse3(sumWide);
+		sum = hsum_ps_sse3(_mm_add_ps(sumWide1, sumWide2));
 	} else {
 		sum = 0.0f;
 	}
