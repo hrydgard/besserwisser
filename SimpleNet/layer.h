@@ -29,7 +29,7 @@ public:
 
 	virtual void Initialize() {}
 	virtual void Forward(const float *input) = 0;   // input = The neurons from the previous layer
-	virtual void Backward(const float *input) = 0;  // input = The gradients from the next layer
+	virtual void Backward(const float *prev_data, const float *next_gradient) = 0;  // input = The gradients from the next layer
 
 	LayerType type;
 	ivec3 inputDim{};  // How the input should be interpreted. Important for some layer types.
@@ -55,24 +55,15 @@ public:
 class ReluLayer : public Layer {
 public:
 	ReluLayer() { type = LayerType::RELU; }
-	void Forward(const float *input) override {
-		// TODO: This can be very easily SIMD'd.
-		for (int i = 0; i < numNeurons; i++) {
-			neurons[i] = std::max(0.0f, input[i]);
-		}
-	}
-	void Backward(const float *input) override {
-		for (int i = 0; i < numNeurons; i++) {
-			gradient[i] = neurons[i] > 0.0f ? 1.0f : 0.0f;
-		}
-	}
+	void Forward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
 class InputLayer : public Layer {
 public:
 	InputLayer() {}
 	void Forward(const float *input) override {}
-	void Backward(const float *input) override {}
+	void Backward(const float *prev_data, const float *next_gradient) override {}
 };
 
 class ImageLayer : public InputLayer {
@@ -84,12 +75,12 @@ class FcLayer : public Layer {
 public:
 	FcLayer() { type = LayerType::FC; }
 	void Forward(const float *input) override;
-	void Backward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
 class SVMLossLayer : public Layer {
 public:
 	SVMLossLayer() { type = LayerType::SVM_LOSS; }
 	void Forward(const float *input) override;
-	void Backward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
 };

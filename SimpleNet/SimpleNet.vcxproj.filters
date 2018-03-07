@@ -7,10 +7,10 @@
     <ClInclude Include="network.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="SimpleNet.cpp" />
     <ClCompile Include="math_util.cpp" />
     <ClCompile Include="mnist.cpp" />
     <ClCompile Include="network.cpp" />
     <ClCompile Include="layer.cpp" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
 </Project>

@@ -91,6 +91,16 @@ float SumAVX(const float *a, size_t size) {
 	return sum;
 }
 
+void Saxpy(size_t n, float a, const float *x, float *y) {
+	for (int i = 0; i < n; ++i)
+		y[i] = a*x[i] + y[i];
+}
+
+void SaxpySSE(size_t n, float a, const float *x, float *y) {
+	for (int i = 0; i < n; ++i)
+		y[i] = a*x[i] + y[i];
+}
+
 // argmin(data[i], i)
 int FindMinIndex(const float *data, size_t size) {
 	float minValue = INFINITY;
@@ -132,7 +142,7 @@ void GaussianNoise(float *data, size_t size, float scale) {
 	}
 }
 
-std::vector<std::vector<int>> GenerateRandomSubsets(int count, int setSize) {
+std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, int setSize) {
 	std::vector<int> all;
 	for (int i = 0; i < count; i++) {
 		all.push_back(i);
@@ -150,9 +160,9 @@ std::vector<std::vector<int>> GenerateRandomSubsets(int count, int setSize) {
 	return sets;
 }
 
-void PrintFloatVector(const char *name, const float *x, size_t size, int maxSize) {
+void PrintFloatVector(const char *name, const float *x, size_t size, size_t maxSize) {
 	printf("%s: (", name);
-	for (int i = 0; i < size; i++) {
+	for (size_t i = 0; i < size; i++) {
 		if (i != size - 1) {
 			printf("%0.5f, ", x[i]);
 			if (i >= maxSize) {
@@ -162,5 +172,23 @@ void PrintFloatVector(const char *name, const float *x, size_t size, int maxSize
 		} else {
 			printf("%0.5f)\n", x[i]);
 		}
+	}
+}
+
+void DiffVectors(const float *a, const float *b, size_t size, float tolerance, size_t maxDiffCount) {
+	int diffCount = 0;
+	for (size_t i = 0; i < size; i++) {
+		float diff = fabsf(a[i] - b[i]);
+		if (diff > tolerance) {
+			if (diffCount < maxDiffCount)
+				printf("DIFF: a[%d] (%f) != b[%d] (%f)\n", (int)i, a[i], (int)i, b[i]);
+			diffCount++;
+		}
+	}
+	if (diffCount >= maxDiffCount) {
+		printf("(too many diffs: %d/%d)\n", diffCount, (int)size);
+	}
+	if (diffCount == 0) {
+		printf("vectors equal (of size %d)!\n", (int)size);
 	}
 }

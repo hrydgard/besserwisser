@@ -26,6 +26,7 @@ float DotSSE(const float *a, const float *b, size_t size);
 float DotAVX(const float *a, const float *b, size_t size);
 float Sum(const float *a, size_t size);
 float SumAVX(const float *a, size_t size);
+void Saxpy(size_t n, float a, const float *x, float *y);
 
 // NOTE: This can return -1 if all the input is INFINITY or if there are NaNs.
 int FindMinIndex(const float *data, size_t size);
@@ -34,7 +35,8 @@ int FindMaxIndex(const float *data, size_t size);
 void FloatNoise(float *data, size_t size, float scale = 1.0f, float bias = 0.0f);
 void GaussianNoise(float *data, size_t size, float scale);  // Centered around 0 with unit stddev before scaling.
 
-void PrintFloatVector(const char *name, const float *x, size_t size, int maxSize = 10);
+void PrintFloatVector(const char *name, const float *x, size_t size, size_t maxSize = 10);
+void DiffVectors(const float *a, const float *b, size_t size, float tolerance, size_t maxDiffCount = 10);
 
 inline float sqr(float x) {
 	return x * x;
@@ -100,7 +102,7 @@ struct DataVector {
 	ivec3 dim{};  // Dimensions the data should be interpreted at. Will tag along on the ride.
 };
 
-std::vector<std::vector<int>> GenerateRandomSubsets(int count, int setSize);
+std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, int setSize);
 
 inline std::vector<int> GetFullSet(int count) {
 	std::vector<int> all;

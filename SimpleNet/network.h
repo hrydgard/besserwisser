@@ -2,11 +2,12 @@
 
 #include "layer.h"
 
-struct NeuralNetwork {
+class NeuralNetwork {
+public:
+	// TODO: Just own the layers here, but connect them in a graph.
 	std::vector<Layer *> layers;
+
+	void InitializeNetwork();
+	void RunForwardPass();
+	void RunBackwardPass();
 };
-
-void InitializeNetwork(NeuralNetwork &network);
-
-void RunForwardPass(NeuralNetwork &network);
-void RunBackwardPass(NeuralNetwork &network);
