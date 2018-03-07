@@ -43,9 +43,10 @@ void NeuralNetwork::InitializeNetwork() {
 			break;
 		case LayerType::SOFTMAX_LOSS:
 		case LayerType::SVM_LOSS:
-			assert(layer.numNeurons == layer.numInputs);
-			layer.neurons = new float[layer.numNeurons];
-			layer.numGradients = layer.numNeurons;
+			assert(layer.numNeurons == 1);
+			assert(layer.numInputs >= 1);
+			layer.neurons = new float[layer.numInputs];
+			layer.numGradients = layer.numInputs;
 			layer.gradient = new float[layer.numGradients]{};
 			break;
 		}

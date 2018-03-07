@@ -26,13 +26,13 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 
 void SVMLossLayer::Forward(const float *input) {
 	assert(label != -1);
-	for (size_t i = 0; i < numNeurons; i++) {
-		if (i == label) {
-			neurons[i] = 0.0f;
-		} else {
-			neurons[i] = std::max(0.0f, input[i] - input[label] + 1.0f);
+	float sum = 0.0f;
+	for (size_t i = 0; i < numInputs; i++) {
+		if (i != label) {
+			sum += std::max(0.0f, input[i] - input[label] + 1.0f);
 		}
 	}
+	neurons[0] = sum;
 }
 
 void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) {
@@ -45,19 +45,19 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 	// The "correct" level is involved in all the rows so it needs a summing loop,
 	// while the others can be computed directly.
 	int positive_count = 0;
-	for (size_t i = 0; i < numNeurons; i++) {
+	for (size_t i = 0; i < numInputs; i++) {
 		if (i != label)
 			positive_count += (prev_data[i] - prev_data[label] + 1.0f) > 0.0f;
 	}
 
-	for (size_t i = 0; i < numNeurons; i++) {
+	for (size_t i = 0; i < numInputs; i++) {
 		if (i == label) {
 			gradient[i] = -(float)positive_count;
 		} else {
 			gradient[i] = (prev_data[i] - prev_data[label] + 1.0f) > 0.0f ? 1.0f : 0.0f;
 		}
 	}
-	PrintFloatVector("SVMgradient", gradient, numNeurons);
+	PrintFloatVector("SVMgradient", gradient, numInputs);
 }
 
 void ReluLayer::Forward(const float *input) {

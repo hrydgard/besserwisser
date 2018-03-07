@@ -43,8 +43,7 @@ float ComputeDataLoss(NeuralNetwork &network, const DataSet &dataSet, int index,
 	network.layers[0]->neurons = dataSet.images[index].data;
 	finalLayer->label = dataSet.labels[index];
 	network.RunForwardPass();
-	float loss = Sum(finalLayer->neurons, finalLayer->numNeurons);
-	return loss;
+	return finalLayer->neurons[0];
 }
 
 float ComputeRegularizationLoss(NeuralNetwork &network) {
@@ -183,7 +182,7 @@ int main() {
 
 	SVMLossLayer lossLayer(&network);
 	lossLayer.numInputs = 10;
-	lossLayer.numNeurons = 10;
+	lossLayer.numNeurons = 1;
 	network.layers.push_back(&lossLayer);
 
 	network.InitializeNetwork();
