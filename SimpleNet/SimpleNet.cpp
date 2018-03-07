@@ -23,9 +23,9 @@ enum class LayerType {
 	MAXPOOL,  // Downsamples by 2x in X and Y but not Z.
 };
 
-class NeuralLayer {
+class Layer {
 public:
-	virtual ~NeuralLayer() {
+	virtual ~Layer() {
 		delete[] neurons;
 		delete[] weights;
 		delete[] gradient;
@@ -56,7 +56,7 @@ public:
 	int label = -1;
 };
 
-class ReluLayer : public NeuralLayer {
+class ReluLayer : public Layer {
 public:
 	ReluLayer() { type = LayerType::RELU; }
 	void Forward(const float *input) override {
@@ -72,13 +72,13 @@ public:
 	}
 };
 
-class ImageLayer : public NeuralLayer {
+class ImageLayer : public Layer {
 public:
 	ImageLayer() { type = LayerType::IMAGE; }
 	void Forward(const float *input) override {}
 };
 
-class FcLayer : public NeuralLayer {
+class FcLayer : public Layer {
 public:
 	FcLayer() { type = LayerType::FC; }
 	void Forward(const float *input) override;
@@ -96,7 +96,7 @@ void FcLayer::Backward(const float *input) {
 
 }
 
-class SVMLossLayer : public NeuralLayer {
+class SVMLossLayer : public Layer {
 public:
 	SVMLossLayer() { type = LayerType::SVM_LOSS; }
 	void Forward(const float *input) override;
@@ -120,10 +120,10 @@ void SVMLossLayer::Backward(const float *input) {
 }
 
 struct NeuralNetwork {
-	std::vector<NeuralLayer *> layers;
+	std::vector<Layer *> layers;
 };
 
-void NeuralLayer::Backward(const float *gradients) {
+void Layer::Backward(const float *gradients) {
 	switch (type) {
 	case LayerType::RELU:
 		break;
@@ -153,7 +153,7 @@ void RunBackwardPass(NeuralNetwork &network) {
 
 void InitializeNetwork(NeuralNetwork &network) {
 	for (int i = 1; i < network.layers.size(); i++) {
-		NeuralLayer &layer = *network.layers[i];
+		Layer &layer = *network.layers[i];
 		assert(layer.numInputs == network.layers[i - 1]->numNeurons);
 		layer.neurons = new float[layer.numNeurons];
 		switch (layer.type) {
@@ -205,8 +205,8 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 
 	float regStrength = 0.5f;
 
-	NeuralLayer *scoreLayer = network.layers[network.layers.size() - 2];
-	NeuralLayer *finalLayer = network.layers.back();
+	Layer *scoreLayer = network.layers[network.layers.size() - 2];
+	Layer *finalLayer = network.layers.back();
 	// Last layer must be a loss layer.
 	assert(finalLayer->type == LayerType::SVM_LOSS || finalLayer->type == LayerType::SOFTMAX_LOSS);
 
@@ -236,7 +236,7 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 		// Note that its gradient will be simply lambdaX.
 		double regSum = 0.0;
 		for (size_t i = 0; i < network.layers.size(); i++) {
-			NeuralLayer &layer = *network.layers[i];
+			Layer &layer = *network.layers[i];
 			for (size_t j = 0; j < layer.numWeights; j++) {
 				regSum += 0.5f * regStrength * sqr(layer.weights[j]);
 			}
@@ -250,7 +250,7 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float *gradient) {
 	const float diff = 0.0001f;
 	const float inv2Diff = 1.0f / (2.0 * diff);
-	NeuralLayer &layer = *network.layers[layerIndex];
+	Layer &layer = *network.layers[layerIndex];
 	size_t size = layer.numWeights;
 	for (int i = 0; i < size; i++) {
 		float origWeight = layer.weights[i];
@@ -269,7 +269,7 @@ void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int
 }
 
 void UpdateLayerBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float speed) {
-	NeuralLayer &layer = *network.layers[layerIndex];
+	Layer &layer = *network.layers[layerIndex];
 	size_t size = layer.numWeights;
 	float *gradient = new float[size];
 	ComputeGradientBruteForce(network, subset, layerIndex, gradient);
