@@ -21,6 +21,7 @@ inline float Dot(const float *a, const float *b, size_t size) {
 }
 
 float DotSSE(const float *a, const float *b, size_t size);
+float DotAVX(const float *a, const float *b, size_t size);
 
 void FloatNoise(float *data, size_t size, float scale = 1.0f, float bias = 0.0f);
 void GaussianNoise(float *data, size_t size, float scale);  // Centered around 0 with unit stddev before scaling.

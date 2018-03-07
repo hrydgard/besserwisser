@@ -9,19 +9,28 @@
 #include "mnist.h"
 
 enum class LayerType {
+	// These should be enough to get good results.
 	UNDEFINED,
-	FC,  // Fully connected. Same as a regular linear classifier matrix.
-	CONV,
-	POOL,  // Downsamples by 2x in X and Y but not Z
-	RELU,  // Best non-linearity.
 	IMAGE,  // Doesn't do anything, just a static image.
+	FC,  // Fully connected. Same as a regular linear classifier matrix.
+	RELU,  // Best non-linearity.
 	SOFTMAX,
 	SVM,
+
+	// Future
+	CONV,
+	MAXPOOL,  // Downsamples by 2x in X and Y but not Z.
 };
 
 typedef float(*LossFunction)(const float *data, size_t size, int correctLabel);
 
 struct NeuralLayer {
+	~NeuralLayer() {
+		delete[] neurons;
+		delete[] weights;
+		delete[] gradient;
+	}
+
 	LayerType type = LayerType::UNDEFINED;
 	ivec3 inputDim{};  // How the input should be interpreted. Important for some layer types.
 
@@ -29,10 +38,17 @@ struct NeuralLayer {
 	int numNeurons = 0;
 	int numWeights = 0;  // for convenience.
 
-	// Trained:
-	float *weights = nullptr;  // Matrix (inputs * neurons)
+	// State
 	float *neurons = nullptr;  // Vector.
 
+	// Trained. Only read from in forward pass, updated after computing gradients.
+	float *weights = nullptr;  // Matrix (inputs * neurons)
+
+	// Backward gradient
+	float *gradient = nullptr;
+
+	// Truth. Used by softmaxloss and svmloss layers.
+	int label = -1;
 };
 
 struct NeuralNetwork {
@@ -54,16 +70,17 @@ void Forward(const NeuralLayer &layer, const float *input) {
 	case LayerType::FC: {
 		// Just a matrix*vector multiplication.
 		for (int y = 0; y < layer.numNeurons; y++) {
-			layer.neurons[y] = DotSSE(input, &layer.weights[y * layer.numInputs], layer.numInputs);
+			layer.neurons[y] = DotAVX(input, &layer.weights[y * layer.numInputs], layer.numInputs);
 		}
 		break;
 	}
-	case LayerType::SOFTMAX:
-		
+	case LayerType::SOFTMAX: {
+
 		break;
+	}
 	case LayerType::CONV:
 		break;
-	case LayerType::POOL:
+	case LayerType::MAXPOOL:
 		break;
 	case LayerType::IMAGE:
 		// Do nothing.
@@ -75,6 +92,11 @@ void Backward(const NeuralLayer &layer, const float *gradients) {
 	switch (layer.type) {
 	case LayerType::RELU:
 		break;
+	case LayerType::FC:
+		break;
+	case LayerType::IMAGE:
+		// Nothing to do, images are read-only.
+		break;
 	}
 }
 
@@ -83,6 +105,10 @@ void RunForwardPass(NeuralNetwork &network) {
 	for (int i = 1; i < network.layers.size(); i++) {
 		Forward(*network.layers[i], network.layers[i - 1]->neurons);
 	}
+}
+
+void RunBackwardPass(NeuralNetwork &network) {
+
 }
 
 void InitializeNetwork(NeuralNetwork &network) {
@@ -94,16 +120,19 @@ void InitializeNetwork(NeuralNetwork &network) {
 		case LayerType::FC:
 			layer.numWeights = layer.numNeurons * layer.numInputs;
 			layer.weights = new float[layer.numWeights]{};
+			layer.gradient = new float[layer.numWeights]{};  // Here we'll accumulate gradients before we do the adjust.
 			GaussianNoise(layer.weights, layer.numWeights, 0.05f);
 			break;
 		case LayerType::RELU:
 			assert(layer.numNeurons == layer.numInputs);
+			layer.gradient = new float[layer.numNeurons];
 			break;
 		case LayerType::IMAGE:
 			break;
 		case LayerType::SOFTMAX:
 		case LayerType::SVM:
 			assert(layer.numNeurons == layer.numInputs);
+			layer.gradient = new float[layer.numNeurons];
 			break;
 		}
 	}
@@ -212,7 +241,7 @@ void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int
 		// Tweak up and compute loss
 		layer.weights[i] = origWeight + diff;
 		float up = ComputeLoss(network, subset);
-		// Tweak down and compute
+		// Tweak down and compute loss
 		layer.weights[i] = origWeight - diff;
 		float down = ComputeLoss(network, subset);
 		// Restore and compute gradient.
