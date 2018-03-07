@@ -3,10 +3,14 @@
   <ItemGroup>
     <ClInclude Include="math_util.h" />
     <ClInclude Include="mnist.h" />
+    <ClInclude Include="layer.h" />
+    <ClInclude Include="network.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SimpleNet.cpp" />
     <ClCompile Include="math_util.cpp" />
     <ClCompile Include="mnist.cpp" />
+    <ClCompile Include="network.cpp" />
+    <ClCompile Include="layer.cpp" />
   </ItemGroup>
 </Project>
