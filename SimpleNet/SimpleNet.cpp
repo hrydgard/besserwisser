@@ -23,19 +23,25 @@ enum class LayerType {
 	MAXPOOL,  // Downsamples by 2x in X and Y but not Z.
 };
 
-struct NeuralLayer {
-	~NeuralLayer() {
+class NeuralLayer {
+public:
+	virtual ~NeuralLayer() {
 		delete[] neurons;
 		delete[] weights;
 		delete[] gradient;
 	}
 
-	LayerType type = LayerType::UNDEFINED;
+	virtual void Initialize() {}
+	virtual void Forward(const float *input) = 0;   // input = The neurons from the previous layer
+	virtual void Backward(const float *input);  // input = The gradients from the next layer
+
+	LayerType type;
 	ivec3 inputDim{};  // How the input should be interpreted. Important for some layer types.
 
 	int numInputs = 0;
 	int numNeurons = 0;
 	int numWeights = 0;  // for convenience.
+	int numGradients = 0;
 
 	// State
 	float *neurons = nullptr;  // Vector.
@@ -50,68 +56,75 @@ struct NeuralLayer {
 	int label = -1;
 };
 
+class ReluLayer : public NeuralLayer {
+public:
+	ReluLayer() { type = LayerType::RELU; }
+	void Forward(const float *input) override {
+		// TODO: This can be very easily SIMD'd.
+		for (int i = 0; i < numNeurons; i++) {
+			neurons[i] = std::max(0.0f, input[i]);
+		}
+	}
+	void Backward(const float *input) override {
+		for (int i = 0; i < numNeurons; i++) {
+			gradient[i] = neurons[i] > 0.0f ? 1.0f : 0.0f;
+		}
+	}
+};
+
+class ImageLayer : public NeuralLayer {
+public:
+	ImageLayer() { type = LayerType::IMAGE; }
+	void Forward(const float *input) override {}
+};
+
+class FcLayer : public NeuralLayer {
+public:
+	FcLayer() { type = LayerType::FC; }
+	void Forward(const float *input) override;
+	void Backward(const float *input) override;
+};
+
+void FcLayer::Forward(const float *input) {
+	// Just a matrix*vector multiplication.
+	for (int y = 0; y < numNeurons; y++) {
+		neurons[y] = DotAVX(input, &weights[y * numInputs], numInputs);
+	}
+}
+
+void FcLayer::Backward(const float *input) {
+
+}
+
+class SVMLossLayer : public NeuralLayer {
+public:
+	SVMLossLayer() { type = LayerType::SVM_LOSS; }
+	void Forward(const float *input) override;
+	void Backward(const float *input) override;
+};
+
+void SVMLossLayer::Forward(const float *input) {
+	float truth = input[label];
+	assert(label != -1);
+	for (size_t i = 0; i < numNeurons; i++) {
+		if (i == label) {
+			neurons[i] = 0.0f;
+		} else {
+			neurons[i] = std::max(0.0f, input[i] - truth + 1.0f);
+		}
+	}
+}
+
+void SVMLossLayer::Backward(const float *input) {
+
+}
+
 struct NeuralNetwork {
 	std::vector<NeuralLayer *> layers;
 };
 
-// Layers own their own outputs.
-void Forward(const NeuralLayer &layer, const float *input) {
-	Tensor output;
-	switch (layer.type) {
-	case LayerType::RELU: {
-		size_t sz = output.GetDataSize();
-		for (int i = 0; i < layer.numInputs; i++) {
-			layer.neurons[i] = std::max(0.0f, input[i]);
-		}
-		break;
-	}
-	case LayerType::FC: {
-		// Just a matrix*vector multiplication.
-		for (int y = 0; y < layer.numNeurons; y++) {
-			layer.neurons[y] = DotAVX(input, &layer.weights[y * layer.numInputs], layer.numInputs);
-		}
-		break;
-	}
-	case LayerType::SVM_LOSS: {
-		int label = layer.label;
-		float truth = input[label];
-		assert(label != -1);
-		for (size_t i = 0; i < layer.numNeurons; i++) {
-			if (i == label) {
-				layer.neurons[i] = 0.0f;
-			} else {
-				layer.neurons[i] = std::max(0.0f, input[i] - truth + 1.0f);
-			}
-		}
-		break;
-	}
-	case LayerType::SOFTMAX_LOSS: {
-		// TODO: Can't figure this out right now :(
-		/*
-		float sumExp = 0.0f;
-		for (size_t i = 0; i < layer.numNeurons; i++) {
-			sumExp += expf(input[i]);
-		}
-		for (size_t i = 0; i < layer.numNeurons; i++) {
-			layer.neurons[i] = -logf()
-		}
-		float normalized = expf(data[correctLabel]) / sumExp;
-		return -logf(normalized);
-		*/
-		break;
-	}
-	case LayerType::CONV:
-		break;
-	case LayerType::MAXPOOL:
-		break;
-	case LayerType::IMAGE:
-		// Do nothing.
-		break;
-	}
-}
-
-void Backward(const NeuralLayer &layer, const float *gradients) {
-	switch (layer.type) {
+void NeuralLayer::Backward(const float *gradients) {
+	switch (type) {
 	case LayerType::RELU:
 		break;
 	case LayerType::FC:
@@ -119,18 +132,23 @@ void Backward(const NeuralLayer &layer, const float *gradients) {
 	case LayerType::IMAGE:
 		// Nothing to do, images are read-only.
 		break;
+	default:
+		// Do nothing.
+		break;
 	}
 }
 
 // Inference.
 void RunForwardPass(NeuralNetwork &network) {
 	for (int i = 1; i < network.layers.size(); i++) {
-		Forward(*network.layers[i], network.layers[i - 1]->neurons);
+		network.layers[i]->Forward(network.layers[i - 1]->neurons);
 	}
 }
 
 void RunBackwardPass(NeuralNetwork &network) {
-
+	for (int i = network.layers.size() - 1; i >= 0; i++) {
+		network.layers[i]->Backward((i < network.layers.size() - 1) ? network.layers[i + 1]->gradient : nullptr);
+	}
 }
 
 void InitializeNetwork(NeuralNetwork &network) {
@@ -280,7 +298,8 @@ int main() {
 	assert(testSet.images.size() == testSet.images.size());
 
 	NeuralNetwork network;
-	NeuralLayer imageLayer{ LayerType::IMAGE, ivec3{ 28, 28, 1 } };
+	ImageLayer imageLayer;
+	imageLayer.inputDim = ivec3{ 28, 28, 1 };
 	imageLayer.numInputs = 0;
 	imageLayer.numNeurons = 28 * 28 + 1;  // + 1 for bias trick
 	network.layers.push_back(&imageLayer);
@@ -301,12 +320,12 @@ int main() {
 	fcLayer.numNeurons = 10;
 	network.layers.push_back(&fcLayer);
 	*/
-	NeuralLayer linearLayer{ LayerType::FC };
+	FcLayer linearLayer;
 	linearLayer.numInputs = 28 * 28 + 1;
 	linearLayer.numNeurons = 10;
 	network.layers.push_back(&linearLayer);
 
-	NeuralLayer lossLayer{ LayerType::SVM_LOSS };
+	SVMLossLayer lossLayer{ };
 	lossLayer.numInputs = 10;
 	lossLayer.numNeurons = 10;
 	network.layers.push_back(&lossLayer);
