@@ -20,7 +20,7 @@ inline float HorizontalSum(__m256 v) {
 
 float DotSSE(const float *a, const float *b, size_t size) {
 	float sum;
-	if (size >= 16) {
+	if (size >= 8) {
 		__m128 sumWide1 = _mm_setzero_ps();
 		__m128 sumWide2 = _mm_setzero_ps();
 		while (size >= 8) {
@@ -45,7 +45,7 @@ float DotAVX(const float *a, const float *b, size_t size) {
 	if (size >= 16) {
 		__m256 sumWide1 = _mm256_setzero_ps();
 		__m256 sumWide2 = _mm256_setzero_ps();
-		while (size >= 8) {
+		while (size >= 16) {
 			sumWide1 = _mm256_add_ps(sumWide1, _mm256_mul_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b)));
 			sumWide2 = _mm256_add_ps(sumWide2, _mm256_mul_ps(_mm256_loadu_ps(a + 8), _mm256_loadu_ps(b + 8)));
 			a += 16;
@@ -60,6 +60,60 @@ float DotAVX(const float *a, const float *b, size_t size) {
 		sum += a[i] * b[i];
 	}
 	return sum;
+}
+
+float Sum(const float *a, size_t size) {
+	float sum = 0.0f;
+	for (size_t i = 0; i < size; i++) {
+		sum += a[i];
+	}
+	return sum;
+}
+
+float SumAVX(const float *a, size_t size) {
+	float sum;
+	if (size >= 16) {
+		__m256 sumWide1 = _mm256_setzero_ps();
+		__m256 sumWide2 = _mm256_setzero_ps();
+		while (size >= 16) {
+			sumWide1 = _mm256_add_ps(sumWide1, _mm256_loadu_ps(a));
+			sumWide2 = _mm256_add_ps(sumWide2, _mm256_loadu_ps(a + 8));
+			a += 16;
+			size -= 16;
+		}
+		sum = HorizontalSum(_mm256_add_ps(sumWide1, sumWide2));
+	} else {
+		sum = 0.0f;
+	}
+	for (size_t i = 0; i < size; i++) {
+		sum += a[i];
+	}
+	return sum;
+}
+
+// argmin(data[i], i)
+int FindMinIndex(const float *data, size_t size) {
+	float minValue = INFINITY;
+	int index = -1;
+	for (size_t i = 0; i < size; i++) {
+		if (data[i] < minValue) {
+			index = (int)i;
+			minValue = data[i];
+		}
+	}
+	return index;
+}
+
+int FindMaxIndex(const float *data, size_t size) {
+	float maxValue = -INFINITY;
+	int index = -1;
+	for (size_t i = 0; i < size; i++) {
+		if (data[i] > maxValue) {
+			index = (int)i;
+			maxValue = data[i];
+		}
+	}
+	return index;
 }
 
 void FloatNoise(float *data, size_t size, float scale, float bias) {

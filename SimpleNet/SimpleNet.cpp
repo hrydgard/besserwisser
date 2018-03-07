@@ -1,5 +1,6 @@
 ﻿#include <cmath>
 #include <cstdint>
+#include <cassert>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -14,15 +15,13 @@ enum class LayerType {
 	IMAGE,  // Doesn't do anything, just a static image.
 	FC,  // Fully connected. Same as a regular linear classifier matrix.
 	RELU,  // Best non-linearity.
-	SOFTMAX,
-	SVM,
+	SOFTMAX_LOSS,
+	SVM_LOSS,  // This seems to converge faster than softmax.
 
 	// Future
 	CONV,
 	MAXPOOL,  // Downsamples by 2x in X and Y but not Z.
 };
-
-typedef float(*LossFunction)(const float *data, size_t size, int correctLabel);
 
 struct NeuralLayer {
 	~NeuralLayer() {
@@ -53,7 +52,6 @@ struct NeuralLayer {
 
 struct NeuralNetwork {
 	std::vector<NeuralLayer *> layers;
-	LossFunction lossFunction;
 };
 
 // Layers own their own outputs.
@@ -74,8 +72,32 @@ void Forward(const NeuralLayer &layer, const float *input) {
 		}
 		break;
 	}
-	case LayerType::SOFTMAX: {
-
+	case LayerType::SVM_LOSS: {
+		int label = layer.label;
+		float truth = input[label];
+		assert(label != -1);
+		for (size_t i = 0; i < layer.numNeurons; i++) {
+			if (i == label) {
+				layer.neurons[i] = 0.0f;
+			} else {
+				layer.neurons[i] = std::max(0.0f, input[i] - truth + 1.0f);
+			}
+		}
+		break;
+	}
+	case LayerType::SOFTMAX_LOSS: {
+		// TODO: Can't figure this out right now :(
+		/*
+		float sumExp = 0.0f;
+		for (size_t i = 0; i < layer.numNeurons; i++) {
+			sumExp += expf(input[i]);
+		}
+		for (size_t i = 0; i < layer.numNeurons; i++) {
+			layer.neurons[i] = -logf()
+		}
+		float normalized = expf(data[correctLabel]) / sumExp;
+		return -logf(normalized);
+		*/
 		break;
 	}
 	case LayerType::CONV:
@@ -125,51 +147,17 @@ void InitializeNetwork(NeuralNetwork &network) {
 			break;
 		case LayerType::RELU:
 			assert(layer.numNeurons == layer.numInputs);
-			layer.gradient = new float[layer.numNeurons];
+			layer.gradient = new float[layer.numNeurons]{};
 			break;
 		case LayerType::IMAGE:
 			break;
-		case LayerType::SOFTMAX:
-		case LayerType::SVM:
+		case LayerType::SOFTMAX_LOSS:
+		case LayerType::SVM_LOSS:
 			assert(layer.numNeurons == layer.numInputs);
-			layer.gradient = new float[layer.numNeurons];
+			layer.gradient = new float[layer.numNeurons]{};
 			break;
 		}
 	}
-}
-
-float ComputeSVMLoss(const float *data, size_t size, int correctLabel) {
-	float loss = 0.0f;
-	float truth = data[correctLabel];
-	for (size_t i = 0; i < size; i++) {
-		if (i == truth)
-			continue;
-		loss += std::max(0.0f, data[i] - truth + 1.0f);
-	}
-	return loss;
-}
-
-float ComputeSoftMaxLoss(const float *data, size_t size, int correctLabel) {
-	float sumExp = 0.0f;
-	for (size_t i = 0; i < size; i++) {
-		float exped = expf(data[i]);
-		sumExp += exped;
-	}
-	float normalized = expf(data[correctLabel]) / sumExp;
-	return -logf(normalized);
-}
-
-// argmax(data[i], i)
-int Judge(const float *data, size_t size) {
-	float maxValue = 0.0f;
-	int argmax = -1;
-	for (size_t i = 0; i < size; i++) {
-		if (data[i] > maxValue) {
-			argmax = (int)i;
-			maxValue = data[i];
-		}
-	}
-	return argmax;
 }
 
 struct DataSet {
@@ -185,6 +173,13 @@ struct Subset {
 struct RunStats {
 	int correct;
 	int wrong;
+	int correctCount[10];
+	void Print() {
+		printf("Results: %d correct, %d wrong\n", correct, wrong);
+		for (int i = 0; i < ARRAY_SIZE(correctCount); i++) {
+			printf("%d: %d\n", i, correctCount[i]);
+		}
+	}
 };
 
 float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats = nullptr) {
@@ -192,21 +187,28 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 
 	float regStrength = 0.5f;
 
+	NeuralLayer *scoreLayer = network.layers[network.layers.size() - 2];
 	NeuralLayer *finalLayer = network.layers.back();
-	// Evaluate network on parts of training set, compute gradients, update weights, backpropagate.
+	// Last layer must be a loss layer.
+	assert(finalLayer->type == LayerType::SVM_LOSS || finalLayer->type == LayerType::SOFTMAX_LOSS);
+
+	// Computes the total loss as a single number over a set of input images.
+	// Should probably do it as a vector instead, it's a bit crazy that this works as is.
 	float totalLoss = 0.0f;
 	auto &images = subset.dataSet->images;
 	auto &labels = subset.dataSet->labels;
 	for (int i = 0; i < subset.indices.size(); i++) {
 		int index = subset.indices[i];
 		network.layers[0]->neurons = images[index].data;
+		finalLayer->label = labels[index];
 		RunForwardPass(network);
-		float loss = network.lossFunction(finalLayer->neurons, finalLayer->numNeurons, labels[index]);
-		totalLoss += loss;
+		totalLoss += Sum(finalLayer->neurons, finalLayer->numNeurons);
 		if (stats) {
-			int label = Judge(finalLayer->neurons, finalLayer->numNeurons);
+			int label = FindMaxIndex(scoreLayer->neurons, scoreLayer->numNeurons);
+			assert(label >= 0);
 			if (label == labels[index]) {
 				stats->correct++;
+				stats->correctCount[label]++;
 			} else {
 				stats->wrong++;
 			}
@@ -225,10 +227,6 @@ float ComputeLoss(NeuralNetwork &network, const Subset &subset, RunStats *stats 
 	}
 	totalLoss /= subset.indices.size();
 	return totalLoss;
-}
-
-void ComputeGradientSVM(NeuralNetwork &network, const Subset &subset, int layerIndex, float *gradient) {
-
 }
 
 void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, int layerIndex, float *gradient) {
@@ -308,8 +306,10 @@ int main() {
 	linearLayer.numNeurons = 10;
 	network.layers.push_back(&linearLayer);
 
-	NeuralLayer *finalLayer = network.layers.back();
-	network.lossFunction = &ComputeSVMLoss;
+	NeuralLayer lossLayer{ LayerType::SVM_LOSS };
+	lossLayer.numInputs = 10;
+	lossLayer.numNeurons = 10;
+	network.layers.push_back(&lossLayer);
 
 	InitializeNetwork(network);
 
@@ -327,8 +327,8 @@ int main() {
 
 	stats = {};
 	float lossOnTestset = ComputeLoss(network, testSubset, &stats);
-	printf("Loss on testset before training: %f", lossOnTestset);
-	printf("Results: %d correct, %d wrong\n", stats.correct, stats.wrong);
+	printf("Loss on test set before training: %f\n", lossOnTestset);
+	stats.Print();
 
 	Subset subset;
 	subset.dataSet = &trainingSet;
@@ -350,7 +350,7 @@ int main() {
 		PrintFloatVector("Neurons", network.layers.back()->neurons, network.layers.back()->numNeurons);
 		printf("Loss before: %0.3f\n", loss);
 		printf("Loss after: %0.3f\n", lossAfterTraining);
-		printf("Results: %d correct, %d wrong\n", stats.correct, stats.wrong);
+		stats.Print();
 	}
 
 	printf("Done.");
@@ -359,8 +359,8 @@ int main() {
 	stats = {};
 	lossOnTestset = ComputeLoss(network, testSubset, &stats);
 	printf("Loss on testset: %f", lossOnTestset);
-	printf("Results: %d correct, %d wrong\n", stats.correct, stats.wrong);
-	
+	stats.Print();
+
 	while (true);
 	/*
 	// Evaluate network on the test set.

@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <vector>
 
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+
 struct ivec3 {
 	int x, y, z;
 };
@@ -22,6 +24,12 @@ inline float Dot(const float *a, const float *b, size_t size) {
 
 float DotSSE(const float *a, const float *b, size_t size);
 float DotAVX(const float *a, const float *b, size_t size);
+float Sum(const float *a, size_t size);
+float SumAVX(const float *a, size_t size);
+
+// NOTE: This can return -1 if all the input is INFINITY or if there are NaNs.
+int FindMinIndex(const float *data, size_t size);
+int FindMaxIndex(const float *data, size_t size);
 
 void FloatNoise(float *data, size_t size, float scale = 1.0f, float bias = 0.0f);
 void GaussianNoise(float *data, size_t size, float scale);  // Centered around 0 with unit stddev before scaling.
