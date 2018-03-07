@@ -1,4 +1,5 @@
 #include "layer.h"
+#include "network.h"
 
 void FcLayer::Forward(const float *input) {
 	// Just a matrix*vector multiplication.
@@ -8,13 +9,17 @@ void FcLayer::Forward(const float *input) {
 }
 
 void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
+	float regStrength = network_->hyperParams.regStrength;
+
 	// Partial derivative
 	for (int y = 0; y < numNeurons; y++) {
 		for (int x = 0; x < numInputs; x++) {
 			int index = y * numInputs + x;
 			// The derivative of a multiplication with respect to a variable is the other variable.
 			// Then do the chain rule multiplication.
-			gradient[index] = weights[index] * next_gradient[y];
+			gradient[index] = prev_data[x] * next_gradient[y] + regStrength * weights[index];
+
+			assert(fabsf(gradient[index]) < 1000.0f);
 		}
 	}
 }
@@ -64,6 +69,6 @@ void ReluLayer::Forward(const float *input) {
 
 void ReluLayer::Backward(const float *prev_data, const float *input) {
 	for (int i = 0; i < numNeurons; i++) {
-		gradient[i] = neurons[i] > 0.0f ? 1.0f : 0.0f;
+		gradient[i] = neurons[i] > 0.0f ? input[i] : 0.0f;
 	}
 }

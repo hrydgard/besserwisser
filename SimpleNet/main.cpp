@@ -34,9 +34,7 @@ struct RunStats {
 	}
 };
 
-const float regStrength = 0.5f;
-
-float ComputeLoss(NeuralNetwork &network, const DataSet &dataSet, int index, RunStats *stats = nullptr) {
+float ComputeDataLoss(NeuralNetwork &network, const DataSet &dataSet, int index, RunStats *stats = nullptr) {
 	assert(network.layers[0]->type == LayerType::IMAGE);
 	Layer *scoreLayer = network.layers[network.layers.size() - 2];
 	Layer *finalLayer = network.layers.back();
@@ -46,17 +44,23 @@ float ComputeLoss(NeuralNetwork &network, const DataSet &dataSet, int index, Run
 	finalLayer->label = dataSet.labels[index];
 	network.RunForwardPass();
 	float loss = Sum(finalLayer->neurons, finalLayer->numNeurons);
+	return loss;
+}
+
+float ComputeRegularizationLoss(NeuralNetwork &network) {
 	// Penalize with regularization term 0.5lambdaX^2 to discourage high volume noise in the matrix.
 	// Note that its gradient will be simply lambdaX.
+	// TODO: AVX!
 	double regSum = 0.0;
 	for (size_t i = 0; i < network.layers.size(); i++) {
 		Layer &layer = *network.layers[i];
-		for (size_t j = 0; j < layer.numWeights; j++) {
-			regSum += 0.5f * regStrength * sqr(layer.weights[j]);
+		if (layer.type == LayerType::FC) {
+			for (size_t j = 0; j < layer.numWeights; j++) {
+				regSum += 0.5f * network.hyperParams.regStrength * sqr(layer.weights[j]);
+			}
 		}
 	}
-	loss += (float)regSum;
-	return loss;
+	return (float)regSum;
 }
 
 float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunStats *stats = nullptr) {
@@ -70,7 +74,7 @@ float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunSta
 	float totalLoss = 0.0f;
 	for (int i = 0; i < subset.indices.size(); i++) {
 		int index = subset.indices[i];
-		float loss = ComputeLoss(network, *subset.dataSet, index, stats);
+		float loss = ComputeDataLoss(network, *subset.dataSet, index, stats);
 		if (stats) {
 			int label = FindMaxIndex(scoreLayer->neurons, scoreLayer->numNeurons);
 			assert(label >= 0);
@@ -84,6 +88,8 @@ float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunSta
 		totalLoss += loss;
 	}
 	totalLoss /= subset.indices.size();
+
+	totalLoss += ComputeRegularizationLoss(network);
 	return totalLoss;
 }
 
@@ -107,6 +113,15 @@ void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, Lay
 	}
 	PrintFloatVector("Weights", layer->weights, size, 10);
 	PrintFloatVector("Gradient", gradient, size, 10);
+}
+
+void UpdateLayerFast(NeuralNetwork &network, const Subset &subset, Layer *layer, float speed) {
+	size_t size = layer->numWeights;
+	// Simple gradient descent.
+	// Saxpy(size, -speed, gradient, layer->weights);
+	for (int i = 0; i < size; i++) {
+		layer->weights[i] -= layer->gradient[i] * speed;
+	}
 }
 
 void UpdateLayerBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float speed) {
@@ -139,7 +154,7 @@ int main() {
 	assert(testSet.images.size() == testSet.images.size());
 
 	NeuralNetwork network;
-	ImageLayer imageLayer;
+	ImageLayer imageLayer(&network);
 	imageLayer.inputDim = ivec3{ 28, 28, 1 };
 	imageLayer.numInputs = 0;
 	imageLayer.numNeurons = 28 * 28 + 1;  // + 1 for bias trick
@@ -161,12 +176,12 @@ int main() {
 	fcLayer.numNeurons = 10;
 	network.layers.push_back(&fcLayer);
 	*/
-	FcLayer linearLayer;
+	FcLayer linearLayer(&network);
 	linearLayer.numInputs = 28 * 28 + 1;
 	linearLayer.numNeurons = 10;
 	network.layers.push_back(&linearLayer);
 
-	SVMLossLayer lossLayer{ };
+	SVMLossLayer lossLayer(&network);
 	lossLayer.numInputs = 10;
 	lossLayer.numNeurons = 10;
 	network.layers.push_back(&lossLayer);
@@ -196,13 +211,14 @@ int main() {
 
 	// Run the network first forward then backwards, then compute the brute force gradient and compare.
 	printf("Fast gradient (b)...\n");
-	ComputeLoss(network, trainingSet, 1, &stats);
+	network.ClearGradients();
+	ComputeDataLoss(network, trainingSet, 1, &stats);
 	network.RunBackwardPass();
 
 	float *gradient = new float[linearLayer.numGradients]{};
 	printf("Computing test gradient over %d examples by brute force (a)...\n", (int)subset.indices.size());
 	ComputeGradientBruteForce(network, subset, &linearLayer, gradient);
-	DiffVectors(gradient, linearLayer.gradient, linearLayer.numGradients, 0.0001f);
+	DiffVectors(gradient, linearLayer.gradient, linearLayer.numGradients, 0.01f, 2000);
 	printf("Done with test.\n");
 	delete[] gradient;
 
@@ -216,9 +232,11 @@ int main() {
 		float loss = ComputeLossOverSubset(network, subset);
 
 		UpdateLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
+		// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
 
 		stats = {};
 		float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
+
 		PrintFloatVector("Neurons", network.layers.back()->neurons, network.layers.back()->numNeurons);
 		printf("Loss before: %0.3f\n", loss);
 		printf("Loss after: %0.3f\n", lossAfterTraining);
