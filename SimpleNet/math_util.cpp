@@ -92,13 +92,41 @@ float SumAVX(const float *a, size_t size) {
 }
 
 void Saxpy(size_t n, float a, const float *x, float *y) {
-	for (int i = 0; i < n; ++i)
+	for (int i = 0; i < n; i++)
 		y[i] = a*x[i] + y[i];
 }
 
 void SaxpySSE(size_t n, float a, const float *x, float *y) {
-	for (int i = 0; i < n; ++i)
+	for (int i = 0; i < n; i++)
 		y[i] = a*x[i] + y[i];
+}
+
+void Accumulate(float *a, const float *b, size_t size) {
+	while (size >= 8) {
+		__m256 sum = _mm256_add_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b));
+		_mm256_store_ps(a, sum);
+		a += 8;
+		b += 8;
+		size -= 8;
+	}
+	for (size_t i = 0; i < size; i++) {
+		a[i] += b[i];
+	}
+}
+
+void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size) {
+	__m256 factor = _mm256_set1_ps(scale);
+	while (size >= 8) {
+		__m256 bvalue = _mm256_loadu_ps(b);
+		__m256 sum = _mm256_add_ps(_mm256_loadu_ps(a), _mm256_mul_ps(factor, _mm256_mul_ps(bvalue, bvalue)));
+		_mm256_store_ps(a, sum);
+		a += 8;
+		b += 8;
+		size -= 8;
+	}
+	for (size_t i = 0; i < size; i++) {
+		a[i] += scale * b[i] * b[i];
+	}
 }
 
 // argmin(data[i], i)

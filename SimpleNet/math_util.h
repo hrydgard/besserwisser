@@ -22,10 +22,15 @@ inline float Dot(const float *a, const float *b, size_t size) {
 	return sum;
 }
 
+// Simple array operations. Some are highly optimized.
 float DotSSE(const float *a, const float *b, size_t size);
 float DotAVX(const float *a, const float *b, size_t size);
 float Sum(const float *a, size_t size);
 float SumAVX(const float *a, size_t size);
+void Accumulate(float *a, const float *b, size_t size);
+void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size);
+
+// LAPACK stuff
 void Saxpy(size_t n, float a, const float *x, float *y);
 
 // NOTE: This can return -1 if all the input is INFINITY or if there are NaNs.

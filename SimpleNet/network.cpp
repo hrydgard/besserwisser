@@ -1,4 +1,5 @@
 #include "network.h"
+#include "math_util.h"
 
 void NeuralNetwork::ClearGradients() {
 	for (int i = 1; i < layers.size(); i++) {
@@ -50,5 +51,16 @@ void NeuralNetwork::InitializeNetwork() {
 			layer.gradient = new float[layer.numGradients]{};
 			break;
 		}
+	}
+}
+
+void NeuralNetwork::AccumulateGradientSum() {
+	for (int i = 0; i < layers.size(); i++) {
+		if (layers[i]->type != LayerType::FC)
+			continue;
+		if (!layers[i]->gradientSum) {
+			layers[i]->gradientSum = new float[layers[i]->numGradients]{};
+		}
+		layers[i]->AccumulateGradientSum();
 	}
 }

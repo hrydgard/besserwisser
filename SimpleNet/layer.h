@@ -35,11 +35,13 @@ public:
 	virtual void Initialize() {}
 	virtual void Forward(const float *input) = 0;   // input = The neurons from the previous layer
 	virtual void Backward(const float *prev_data, const float *next_gradient) = 0;  // input = The gradients from the next layer
+
 	void ClearGradients() {
 		if (gradient) {
 			memset(gradient, 0, sizeof(gradient[0]) * numGradients);
 		}
 	}
+	void AccumulateGradientSum();
 
 	LayerType type;
 	ivec3 inputDim{};  // How the input should be interpreted. Important for some layer types.
@@ -53,11 +55,14 @@ public:
 	// can be shared between threads or something.
 	float *neurons = nullptr;  // Vector.
 
-														 // Trained. Only read from in forward pass, updated after computing gradients.
+	// Trained. Only read from in forward pass, updated after computing gradients.
 	float *weights = nullptr;  // Matrix (inputs * neurons)
 
-														 // Backward gradient
+	// Gradient to backpropagate to the next step.
 	float *gradient = nullptr;
+
+	// Used in batch training only to keep intermediate data.
+	float *gradientSum = nullptr;
 
 	// Truth. Used by softmaxloss and svmloss layers.
 	int label = -1;
@@ -98,3 +103,14 @@ public:
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
+
+class SoftMaxLayer : public Layer {
+	SoftMaxLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::SOFTMAX_LOSS; }
+	void Forward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
+};
+
+/*
+class ConvLayer : public Layer {
+	ConvLayer(NeuralNetwork *network) : Layer(network) {}
+};*/

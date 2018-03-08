@@ -1,5 +1,10 @@
 #include "layer.h"
 #include "network.h"
+#include "math_util.h"
+
+void Layer::AccumulateGradientSum() {
+	Accumulate(gradientSum, gradient, numGradients);
+}
 
 void FcLayer::Forward(const float *input) {
 	// Just a matrix*vector multiplication.
@@ -58,6 +63,20 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 		}
 	}
 	PrintFloatVector("SVMgradient", gradient, numInputs);
+}
+
+void SoftMaxLayer::Forward(const float *input) {
+	float expSum = 0.0f;
+	for (size_t i = 0; i < numInputs; i++) {
+		expSum += expf(input[i]);
+	}
+	neurons[0] = -logf(expf(input[label]) / expSum);
+}
+
+void SoftMaxLayer::Backward(const float *prev_data, const float *next_gradient) {
+	assert(!next_gradient);
+	// TODO: Implement. Forward should cache the p(k) values, computed in a loop. Could also recompute them from prev_data.
+	// http://cs231n.github.io/neural-networks-case-study/#together
 }
 
 void ReluLayer::Forward(const float *input) {

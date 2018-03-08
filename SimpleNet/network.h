@@ -13,7 +13,12 @@ public:
 	HyperParams hyperParams;
 
 	void InitializeNetwork();
+
+	// Inference
 	void RunForwardPass();
+
+	// Training
 	void RunBackwardPass();
 	void ClearGradients();
+	void AccumulateGradientSum();
 };

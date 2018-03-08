@@ -34,6 +34,7 @@ struct RunStats {
 	}
 };
 
+// Runs the forward pass.
 float ComputeDataLoss(NeuralNetwork &network, const DataSet &dataSet, int index, RunStats *stats = nullptr) {
 	assert(network.layers[0]->type == LayerType::IMAGE);
 	Layer *scoreLayer = network.layers[network.layers.size() - 2];
@@ -51,11 +52,12 @@ float ComputeRegularizationLoss(NeuralNetwork &network) {
 	// Note that its gradient will be simply lambdaX.
 	// TODO: AVX!
 	double regSum = 0.0;
+	float regStrength = 0.5f * network.hyperParams.regStrength;
 	for (size_t i = 0; i < network.layers.size(); i++) {
 		Layer &layer = *network.layers[i];
 		if (layer.type == LayerType::FC) {
 			for (size_t j = 0; j < layer.numWeights; j++) {
-				regSum += 0.5f * network.hyperParams.regStrength * sqr(layer.weights[j]);
+				regSum += regStrength * sqr(layer.weights[j]);
 			}
 		}
 	}
@@ -92,6 +94,7 @@ float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunSta
 	return totalLoss;
 }
 
+// TODO: Change this to compare directly to the most recently computed gradient?
 void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float *gradient) {
 	assert(layer->type == LayerType::FC);
 
@@ -213,11 +216,12 @@ int main() {
 	network.ClearGradients();
 	ComputeDataLoss(network, trainingSet, 1, &stats);
 	network.RunBackwardPass();
+	network.AccumulateGradientSum();
 
 	float *gradient = new float[linearLayer.numGradients]{};
 	printf("Computing test gradient over %d examples by brute force (a)...\n", (int)subset.indices.size());
 	ComputeGradientBruteForce(network, subset, &linearLayer, gradient);
-	DiffVectors(gradient, linearLayer.gradient, linearLayer.numGradients, 0.01f, 2000);
+	DiffVectors(gradient, linearLayer.gradientSum, linearLayer.numGradients, 0.01f, 2000);
 	printf("Done with test.\n");
 	delete[] gradient;
 
