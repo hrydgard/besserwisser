@@ -138,6 +138,7 @@ public:
 
 // Outputs the loss as a single float.
 class SoftMaxLayer : public Layer {
+public:
 	SoftMaxLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::SOFTMAX_LOSS; }
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
@@ -145,6 +146,7 @@ class SoftMaxLayer : public Layer {
 
 // Convolutional image layer.
 class ConvLayer : public Layer {
+public:
 	ConvLayer(NeuralNetwork *network) : Layer(network) {}
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;

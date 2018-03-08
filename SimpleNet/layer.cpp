@@ -2,10 +2,6 @@
 #include "network.h"
 #include "math_util.h"
 
-// Used to sum up the results of each minibatch before updating the weights.
-// If we multithread this, we'll want one gradientSum vector per core, and sum them
-// all up at the end.
-
 void FcLayer::Initialize() {
 	data = new float[numData];
 	numWeights = numData * numInputs;
@@ -159,8 +155,9 @@ void Relu6Layer::Backward(const float *prev_data, const float *input) {
 }
 
 void ConvLayer::Forward(const float *input) {
-
+	// TODO: Implement
 }
 
 void ConvLayer::Backward(const float *prev_data, const float *input) {
+	// TODO: Implement
 }
