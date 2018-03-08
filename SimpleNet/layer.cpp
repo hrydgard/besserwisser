@@ -91,3 +91,16 @@ void ReluLayer::Backward(const float *prev_data, const float *input) {
 		gradient[i] = data[i] > 0.0f ? input[i] : 0.0f;
 	}
 }
+
+void Relu6Layer::Forward(const float *input) {
+	// TODO: This can be very easily SIMD'd.
+	for (int i = 0; i < numData; i++) {
+		data[i] = std::max(0.0f, std::min(input[i], 6.0f));
+	}
+}
+
+void Relu6Layer::Backward(const float *prev_data, const float *input) {
+	for (int i = 0; i < numData; i++) {
+		gradient[i] = data[i] > 6.0f ? 0.0f : (data[i] > 0.0f ? input[i] : 0.0f);
+	}
+}
