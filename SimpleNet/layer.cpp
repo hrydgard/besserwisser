@@ -52,7 +52,11 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 		AccumulateScaledVectors(deltaWeightSum + offset, prev_data, next_gradient[y], weights + offset, regStrength, numInputs);
 	}
 
+	if (skipBackProp)
+		return;
+
 	// We also need to back propagate the gradient through.
+	// NOTE: We should be able to skip this if the previous layer is an image (or first!)!
 	for (int x = 0; x < numInputs; x++) {
 		float sum = 0.0f;
 		for (int y = 0; y < numData; y++) {

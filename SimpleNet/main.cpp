@@ -91,7 +91,7 @@ float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunSta
 
 // TODO: Change this to compare directly to the most recently computed gradient
 // Computes the sum of gradients from a minibatch.
-void ComputeGradientSumBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float *gradient) {
+void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float *gradient) {
 	assert(layer->type == LayerType::FC);
 	FcLayer *fcLayer = dynamic_cast<FcLayer *>(layer);
 
@@ -138,7 +138,7 @@ void TrainLayerBruteForce(NeuralNetwork &network, const Subset &subset, Layer *l
 
 	size_t size = fcLayer->numWeights;
 	float *gradient = new float[size];
-	ComputeGradientSumBruteForce(network, subset, layer, gradient);
+	ComputeDeltaWeightSumBruteForce(network, subset, layer, gradient);
 	// Simple gradient descent.
 	// Saxpy(size, -speed, gradient, layer->weights);
 	for (int i = 0; i < size; i++) {
@@ -157,6 +157,8 @@ int main() {
 	// http://yann.lecun.com/exdb/mnist/
 	// The expected error rate for a pure linear classifier is 12% and we achieve that
 	// with both fast back propagation and of course brute force.
+	// The expected error rate for a 2-layer with 100 nodes is 2% which we do achieve
+	// with the right hyperparameters!
 	DataSet trainingSet;
 	trainingSet.images = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
 	trainingSet.labels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
@@ -168,32 +170,41 @@ int main() {
 	assert(testSet.images.size() == testSet.images.size());
 
 	NeuralNetwork network;
+	network.hyperParams.regStrength = 0.001f;
+	/*
+	network.hyperParams.miniBatchSize = 16;
+	network.hyperParams.weightInitScale = 0.1f;
+	*/
 	ImageLayer imageLayer(&network);
 	imageLayer.numInputs = 0;
 	imageLayer.numData = 28 * 28 + 1;  // + 1 for bias trick
 	network.layers.push_back(&imageLayer);
 
-#if 0
+#if 1
 	FcLayer hiddenLayer(&network);
 	hiddenLayer.numInputs = 28 * 28 + 1;
-	hiddenLayer.numData = 10;
+	hiddenLayer.numData = 100;
+	hiddenLayer.skipBackProp = true;
 	network.layers.push_back(&hiddenLayer);
 
-	/*
 	ReluLayer relu(&network);
 	relu.numInputs = hiddenLayer.numData;
 	relu.numData = hiddenLayer.numData;
 	network.layers.push_back(&relu);
-	*/
+
 	FcLayer linearLayer(&network);
 	linearLayer.numInputs = hiddenLayer.numData;
 	linearLayer.numData = 10;
 	network.layers.push_back(&linearLayer);
+
+	FcLayer *testLayer = (FcLayer *)&hiddenLayer;
 #else
 	FcLayer linearLayer(&network);
 	linearLayer.numInputs = 28 * 28 + 1;
 	linearLayer.numData = 10;
 	network.layers.push_back(&linearLayer);
+
+	FcLayer *testLayer = (FcLayer *)&linearLayer;
 #endif
 
 	SVMLossLayer lossLayer(&network);
@@ -235,11 +246,9 @@ int main() {
 	}
 	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
 
-	FcLayer *testLayer = (FcLayer *)&linearLayer;
-
 	float *deltaWeightSum = new float[testLayer->numWeights]{};
 	printf("Computing test gradient over %d examples by brute force (a)...\n", (int)subset.indices.size());
-	ComputeGradientSumBruteForce(network, subset, testLayer, deltaWeightSum);
+	ComputeDeltaWeightSumBruteForce(network, subset, testLayer, deltaWeightSum);
 	int diffCount = DiffVectors(deltaWeightSum, testLayer->deltaWeightSum, testLayer->numWeights, 0.01f, 200);
 	printf("Done with test.\n");
 
@@ -251,13 +260,13 @@ int main() {
 
 	delete[] deltaWeightSum;
 
-	float trainingSpeed = 0.005f;
+	float trainingSpeed = 0.015f;
 
 	int rounds = (int)subsets.size();
 	for (int epoch = 0; epoch < 100; epoch++) {
-		// Decay trainingspeed every 10 epochs. TODO: Make tunable.
+		// Decay training speed every 10 epochs. TODO: Make tunable.
 		if (epoch != 0 && (epoch % 10 == 0))
-			trainingSpeed *= 0.5f;
+			trainingSpeed *= 0.75f;
 
 		printf("Epoch %d, trainingSpeed=%f\n", epoch + 1, trainingSpeed);
 		for (int i = 0; i < rounds; i++) {
@@ -285,6 +294,7 @@ int main() {
 		lossOnTestset = ComputeLossOverSubset(network, testSubset, &stats);
 		printf("Loss on testset: %f\n", lossOnTestset);
 		stats.Print();
+		PrintFloatVector("hidden", hiddenLayer.data, hiddenLayer.numData);
 	}
 
 	printf("Done.");

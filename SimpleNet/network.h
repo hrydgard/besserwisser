@@ -9,7 +9,7 @@ public:
 	std::vector<Layer *> layers;
 
 	struct HyperParams {
-		float regStrength = 0.5f;
+		float regStrength = 0.01f;
 		float weightInitScale = 0.05f;
 		int miniBatchSize = 32;
 	};

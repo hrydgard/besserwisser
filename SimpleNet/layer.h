@@ -124,6 +124,8 @@ public:
 
 	// Used in batch training only to keep intermediate data.
 	float *deltaWeightSum = nullptr;
+
+	bool skipBackProp = false;
 };
 
 // Outputs the loss as a single float.
