@@ -29,7 +29,7 @@ struct RunStats {
 	void Print() {
 		printf("Results: %d correct, %d wrong\n", correct, wrong);
 		for (int i = 0; i < ARRAY_SIZE(correctCount); i++) {
-			printf("%d: %d\n", i, correctCount[i]);
+			// printf("%d: %d\n", i, correctCount[i]);
 		}
 	}
 };
@@ -119,12 +119,28 @@ void ComputeGradientSumBruteForce(NeuralNetwork &network, const Subset &subset, 
 	PrintFloatVector("Gradient", gradient, size, 10);
 }
 
-void UpdateLayerFast(NeuralNetwork &network, const Subset &subset, Layer *layer, float speed) {
-	size_t size = layer->numWeights;
-	// Simple gradient descent.
-	// Saxpy(size, -speed, gradient, layer->weights);
-	for (int i = 0; i < size; i++) {
-		layer->weights[i] -= layer->gradient[i] * speed;
+// Train a single layer using a minibatch.
+
+void TrainNetworkFast(NeuralNetwork &network, const Subset &subset, float speed) {
+	network.ClearGradients();
+	for (auto index : subset.indices) {
+		network.layers[0]->data = subset.dataSet->images[index].data;
+		network.layers.back()->label = subset.dataSet->labels[index];
+		network.RunForwardPass();
+		network.RunBackwardPass();
+		network.AccumulateGradientSum();
+	}
+	network.ScaleGradientSum(1.0f / subset.indices.size());
+
+	// Update all training weights.
+	for (auto *layer : network.layers) {
+		if (layer->type != LayerType::FC)
+			continue;
+		// Simple gradient descent. Should try with momentum etc as well.
+		// Saxpy(size, -speed, gradient, layer->weights);
+		for (int i = 0; i < layer->numGradients; i++) {
+			layer->weights[i] -= layer->gradientSum[i] * speed;
+		}
 	}
 }
 
@@ -147,6 +163,9 @@ void TrainLayerBruteForce(NeuralNetwork &network, const Subset &subset, Layer *l
 // INPUT -> FC -> LOSS
 
 int main() {
+	// http://yann.lecun.com/exdb/mnist/
+	// The expected error rate for a pure linear classifier is 12% and we achieve that
+	// with both fast back propagation and of course brute force.
 	DataSet trainingSet;
 	trainingSet.images = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
 	trainingSet.labels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
@@ -233,35 +252,40 @@ int main() {
 	printf("Done with test.\n");
 	delete[] gradientSum;
 
-	float trainingSpeed = 0.05f;
+	float trainingSpeed = 0.005f;
 
-	int rounds = 200;
-	for (int i = 0; i < rounds; i++) {
-		int subsetIndex = i % subsets.size();
-		printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
-		// Train on different subsets each round (stochastic gradient descent)
-		subset.indices = subsets[subsetIndex];
-		float loss = ComputeLossOverSubset(network, subset);
+	int rounds = (int)subsets.size();
+	for (int epoch = 0; epoch < 20; epoch++) {
+		printf("Epoch %d, trainingSpeed=%f\n", epoch + 1, trainingSpeed);
+		for (int i = 0; i < rounds; i++) {
+			int subsetIndex = i % subsets.size();
+			// printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
+			// Train on different subsets each round (stochastic gradient descent)
+			subset.indices = subsets[subsetIndex];
+			// float loss = ComputeLossOverSubset(network, subset);
 
-		TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
-		// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
+			// TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
+			TrainNetworkFast(network, subset, trainingSpeed);
+			// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
 
+			// stats = {};
+			// float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
+
+			// PrintFloatVector("Neurons", network.layers.back()->data, network.layers.back()->numData);
+			// printf("Loss before: %0.3f\n", loss);
+			// printf("Loss after: %0.3f\n", lossAfterTraining);
+			// stats.Print();
+		}
+		subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
+		printf("Running on testset (%d images)...\n", (int)testSubset.dataSet->images.size());
 		stats = {};
-		float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
-
-		PrintFloatVector("Neurons", network.layers.back()->data, network.layers.back()->numData);
-		printf("Loss before: %0.3f\n", loss);
-		printf("Loss after: %0.3f\n", lossAfterTraining);
+		lossOnTestset = ComputeLossOverSubset(network, testSubset, &stats);
+		printf("Loss on testset: %f\n", lossOnTestset);
 		stats.Print();
 	}
 
 	printf("Done.");
 	
-	printf("Running on testset (%d images)...", (int)testSubset.dataSet->images.size());
-	stats = {};
-	lossOnTestset = ComputeLossOverSubset(network, testSubset, &stats);
-	printf("Loss on testset: %f", lossOnTestset);
-	stats.Print();
 
 	while (true);
 	/*
