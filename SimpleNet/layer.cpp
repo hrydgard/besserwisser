@@ -37,7 +37,7 @@ void FcLayer::Forward(const float *input) {
 void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 	float regStrength = network_->hyperParams.regStrength;
 
-	// Partial derivative.
+	// Partial derivative dL/dx.
 	for (int y = 0; y < numData; y++) {
 		int offset = y * numInputs;
 
@@ -50,6 +50,9 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 		//for (int x = 0; x < numInputs; x++)
 		//	deltaWeightSum[offset + x] += prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
 		AccumulateScaledVectors(deltaWeightSum + offset, prev_data, next_gradient[y], weights + offset, regStrength, numInputs);
+
+		// We also need to back propagate the gradient through.
+		gradient[y] = next_gradient[y];  // TODO: This isn't right.
 	}
 }
 
@@ -57,16 +60,16 @@ float FcLayer::GetRegularizationLoss() {
 	// Simple L2 norm.
 	// The derivative is used in Backward() so if you change this,
 	// gotta change there too.
+	// for (int i = 0; i < numWeights; i++)
+	//   sum += sqr(weights[i]);
 	return SumSquaresAVX(weights, numWeights);
 }
 
 void FcLayer::UpdateWeights(float trainingSpeed) {
 	// Simple gradient descent. Should try with momentum etc as well.
+	// for (int i = 0; i < layer->numWeights; i++)
+	//   weights[i] -= deltaWeightSum[i] * speed;
 	SaxpyAVX(numWeights, -trainingSpeed, deltaWeightSum, weights);
-	/*
-	for (int i = 0; i < layer->numWeights; i++)
-		layer->weights[i] -= layer->gradientSum[i] * speed;
-	*/
 }
 
 void SVMLossLayer::Forward(const float *input) {
