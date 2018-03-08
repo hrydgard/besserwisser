@@ -2,8 +2,15 @@
 #include "network.h"
 #include "math_util.h"
 
+// Used to sum up the results of each minibatch before updating the weights.
+// If we multithread this, we'll want one gradientSum vector per core, and sum them
+// all up at the end.
 void Layer::AccumulateGradientSum() {
 	Accumulate(gradientSum, gradient, numGradients);
+}
+
+void Layer::ScaleGradientSum(float factor) {
+	ScaleInPlace(gradientSum, factor, numGradients);
 }
 
 void FcLayer::Forward(const float *input) {
@@ -16,15 +23,16 @@ void FcLayer::Forward(const float *input) {
 void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 	float regStrength = network_->hyperParams.regStrength;
 
-	// Partial derivative
+	// Partial derivative.
 	for (int y = 0; y < numData; y++) {
 		for (int x = 0; x < numInputs; x++) {
 			int index = y * numInputs + x;
 			// The derivative of a multiplication with respect to a variable is the other variable.
-			// Then do the chain rule multiplication.
+			// Then do the chain rule multiplication. Remember to add on the partial derivative
+			// of the regularization function, which turns out to be very simple.
+			// Also note that we regularize the biases if they've been baked into weights, we don't care.
+			// The literature says that it really doesn't seem to matter but is unclear on why.
 			gradient[index] = prev_data[x] * next_gradient[y] + regStrength * weights[index];
-
-			assert(fabsf(gradient[index]) < 1000.0f);
 		}
 	}
 }
@@ -62,7 +70,6 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 			gradient[i] = (prev_data[i] - prev_data[label] + 1.0f) > 0.0f ? 1.0f : 0.0f;
 		}
 	}
-	PrintFloatVector("SVMgradient", gradient, numInputs);
 }
 
 void SoftMaxLayer::Forward(const float *input) {

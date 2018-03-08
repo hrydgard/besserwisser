@@ -95,8 +95,9 @@ float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunSta
 	return totalLoss;
 }
 
-// TODO: Change this to compare directly to the most recently computed gradient?
-void ComputeGradientBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float *gradient) {
+// TODO: Change this to compare directly to the most recently computed gradient
+// Computes the sum of gradients from a minibatch.
+void ComputeGradientSumBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float *gradient) {
 	assert(layer->type == LayerType::FC);
 
 	const float diff = 0.001f;
@@ -130,7 +131,7 @@ void UpdateLayerFast(NeuralNetwork &network, const Subset &subset, Layer *layer,
 void TrainLayerBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float speed) {
 	size_t size = layer->numWeights;
 	float *gradient = new float[size];
-	ComputeGradientBruteForce(network, subset, layer, gradient);
+	ComputeGradientSumBruteForce(network, subset, layer, gradient);
 	// Simple gradient descent.
 	// Saxpy(size, -speed, gradient, layer->weights);
 	for (int i = 0; i < size; i++) {
@@ -179,6 +180,7 @@ int main() {
 	fcLayer.numNeurons = 10;
 	network.layers.push_back(&fcLayer);
 	*/
+
 	FcLayer linearLayer(&network);
 	linearLayer.numInputs = 28 * 28 + 1;
 	linearLayer.numData = 10;
@@ -193,7 +195,7 @@ int main() {
 
 	static const char *labelNames[10] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 
-	int subsetSize = 32;
+	int subsetSize = network.hyperParams.miniBatchSize;
 
 	std::vector<std::vector<int>> subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
 
@@ -210,21 +212,26 @@ int main() {
 
 	Subset subset;
 	subset.dataSet = &trainingSet;
-	subset.indices = { 1 };
+	subset.indices = { 2, 3 };
 
 	// Run the network first forward then backwards, then compute the brute force gradient and compare.
 	printf("Fast gradient (b)...\n");
 	network.ClearGradients();
-	ComputeDataLoss(network, trainingSet, 1, &stats);
-	network.RunBackwardPass();
-	network.AccumulateGradientSum();
+	for (auto index : subset.indices) {
+		network.layers[0]->data = subset.dataSet->images[index].data;
+		network.layers.back()->label = subset.dataSet->labels[index];
+		network.RunForwardPass();
+		network.RunBackwardPass();
+		network.AccumulateGradientSum();
+	}
+	network.ScaleGradientSum(1.0f / subset.indices.size());
 
-	float *gradient = new float[linearLayer.numGradients]{};
+	float *gradientSum = new float[linearLayer.numGradients]{};
 	printf("Computing test gradient over %d examples by brute force (a)...\n", (int)subset.indices.size());
-	ComputeGradientBruteForce(network, subset, &linearLayer, gradient);
-	DiffVectors(gradient, linearLayer.gradientSum, linearLayer.numGradients, 0.01f, 2000);
+	ComputeGradientSumBruteForce(network, subset, &linearLayer, gradientSum);
+	DiffVectors(gradientSum, linearLayer.gradientSum, linearLayer.numGradients, 0.01f, 2000);
 	printf("Done with test.\n");
-	delete[] gradient;
+	delete[] gradientSum;
 
 	float trainingSpeed = 0.05f;
 

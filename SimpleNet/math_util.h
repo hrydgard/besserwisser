@@ -30,6 +30,7 @@ float SumAVX(const float *a, size_t size);
 float SumSquaresAVX(const float *a, size_t size);
 void Accumulate(float *a, const float *b, size_t size);
 void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size);
+void ScaleInPlace(float *a, float factor, size_t size);
 
 // LAPACK stuff
 void Saxpy(size_t n, float a, const float *x, float *y);

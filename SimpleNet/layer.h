@@ -43,6 +43,7 @@ public:
 		}
 	}
 	void AccumulateGradientSum();
+	void ScaleGradientSum(float factor);
 
 	LayerType type;
 	ivec3 inputDim{};  // How the input should be interpreted. Important for some layer types.

@@ -46,8 +46,13 @@ float DotAVX(const float *a, const float *b, size_t size) {
 		__m256 sumWide1 = _mm256_setzero_ps();
 		__m256 sumWide2 = _mm256_setzero_ps();
 		while (size >= 16) {
+#if 0
 			sumWide1 = _mm256_add_ps(sumWide1, _mm256_mul_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b)));
 			sumWide2 = _mm256_add_ps(sumWide2, _mm256_mul_ps(_mm256_loadu_ps(a + 8), _mm256_loadu_ps(b + 8)));
+#else
+			sumWide1 = _mm256_fmadd_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b), sumWide1);
+			sumWide2 = _mm256_fmadd_ps(_mm256_loadu_ps(a + 8), _mm256_loadu_ps(b + 8), sumWide2);
+#endif
 			a += 16;
 			b += 16;
 			size -= 16;
@@ -99,8 +104,13 @@ float SumSquaresAVX(const float *a, size_t size) {
 		while (size >= 16) {
 			__m256 x = _mm256_loadu_ps(a);
 			__m256 y = _mm256_loadu_ps(a + 8);
+#if 1
 			sumWide1 = _mm256_add_ps(sumWide1, _mm256_mul_ps(x, x));
 			sumWide2 = _mm256_add_ps(sumWide2, _mm256_mul_ps(y, y));
+#else
+			sumWide1 = _mm256_fmadd_ps(x, x, sumWide1);
+			sumWide2 = _mm256_fmadd_ps(y, y, sumWide2);
+#endif
 			a += 16;
 			size -= 16;
 		}
@@ -135,6 +145,19 @@ void Accumulate(float *a, const float *b, size_t size) {
 	}
 	for (size_t i = 0; i < size; i++) {
 		a[i] += b[i];
+	}
+}
+
+void ScaleInPlace(float *a, float factor, size_t size) {
+	__m256 factor8 = _mm256_set_ps(factor, factor, factor, factor, factor, factor, factor, factor);
+	while (size >= 8) {
+		__m256 product = _mm256_mul_ps(_mm256_load_ps(a), factor8);
+		_mm256_store_ps(a, product);
+		a += 8;
+		size -= 8;
+	}
+	for (size_t i = 0; i < size; i++) {
+		a[i] *= factor;
 	}
 }
 

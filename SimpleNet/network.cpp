@@ -6,6 +6,7 @@ void NeuralNetwork::ClearGradients() {
 		layers[i]->ClearGradients();
 	}
 }
+
 // Inference.
 void NeuralNetwork::RunForwardPass() {
 	for (int i = 1; i < layers.size(); i++) {
@@ -18,6 +19,26 @@ void NeuralNetwork::RunBackwardPass() {
 		layers[i]->Backward(
 			i > 0 ? layers[i - 1]->data : 0,
 			(i < layers.size() - 1) ? layers[i + 1]->gradient : nullptr);
+	}
+}
+
+void NeuralNetwork::AccumulateGradientSum() {
+	for (int i = 0; i < layers.size(); i++) {
+		if (layers[i]->type != LayerType::FC)
+			continue;
+		if (!layers[i]->gradientSum) {
+			layers[i]->gradientSum = new float[layers[i]->numGradients]{};
+		}
+		layers[i]->AccumulateGradientSum();
+	}
+}
+
+void NeuralNetwork::ScaleGradientSum(float factor) {
+	for (int i = 0; i < layers.size(); i++) {
+		if (layers[i]->type != LayerType::FC)
+			continue;
+		assert(layers[i]->gradientSum);
+		layers[i]->ScaleGradientSum(factor);
 	}
 }
 
@@ -51,16 +72,5 @@ void NeuralNetwork::InitializeNetwork() {
 			layer.gradient = new float[layer.numGradients]{};
 			break;
 		}
-	}
-}
-
-void NeuralNetwork::AccumulateGradientSum() {
-	for (int i = 0; i < layers.size(); i++) {
-		if (layers[i]->type != LayerType::FC)
-			continue;
-		if (!layers[i]->gradientSum) {
-			layers[i]->gradientSum = new float[layers[i]->numGradients]{};
-		}
-		layers[i]->AccumulateGradientSum();
 	}
 }
