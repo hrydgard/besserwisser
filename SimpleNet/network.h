@@ -10,6 +10,7 @@ public:
 
 	struct HyperParams {
 		float regStrength = 0.5f;
+		float weightInitScale = 0.05f;
 		int miniBatchSize = 32;
 	};
 	HyperParams hyperParams;
@@ -23,7 +24,6 @@ public:
 	// we can't easily multithread this currently, will need some reorganization
 	// like having one accumulation buffer per thread.
 	void RunBackwardPass();
-	void ClearGradients();
-	void AccumulateGradientSum();
-	void ScaleGradientSum(float factor);
+	void ClearDeltaWeightSum();
+	void ScaleDeltaWeightSum(float factor);
 };

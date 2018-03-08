@@ -22,7 +22,7 @@ inline float Dot(const float *a, const float *b, size_t size) {
 	return sum;
 }
 
-// Simple array operations. Some are highly optimized.
+// Simple array operations. Most are highly optimized.
 float DotSSE(const float *a, const float *b, size_t size);
 float DotAVX(const float *a, const float *b, size_t size);
 float Sum(const float *a, size_t size);
@@ -30,11 +30,10 @@ float SumAVX(const float *a, size_t size);
 float SumSquaresAVX(const float *a, size_t size);
 void Accumulate(float *a, const float *b, size_t size);
 void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size);
+void AccumulateScaledVectors(float *sum, const float *a, float factorA, const float *b, float factorB, size_t size);
 void ScaleInPlace(float *a, float factor, size_t size);
-void SumScaledVectors(float *sum, const float *a, float factorA, const float *b, float factorB, size_t size);
 
 // LAPACK stuff
-void Saxpy(size_t n, float a, const float *x, float *y);
 void SaxpyAVX(size_t size, float a, const float *x, float *y);
 
 // NOTE: This can return -1 if all the input is INFINITY or if there are NaNs.
@@ -45,7 +44,7 @@ void FloatNoise(float *data, size_t size, float scale = 1.0f, float bias = 0.0f)
 void GaussianNoise(float *data, size_t size, float scale);  // Centered around 0 with unit stddev before scaling.
 
 void PrintFloatVector(const char *name, const float *x, size_t size, size_t maxSize = 10);
-void DiffVectors(const float *a, const float *b, size_t size, float tolerance, size_t maxDiffCount = 10);
+int DiffVectors(const float *a, const float *b, size_t size, float tolerance, size_t maxDiffCount = 10);
 
 inline float sqr(float x) {
 	return x * x;
@@ -95,32 +94,13 @@ struct DataVector {
 	~DataVector() {
 		delete[] data;
 	}
-	// Probably quite useless.
-	void SetToClassification(int x, size_t count) {
-		if (size != count) {
-			delete[] data;
-			size = count;
-			data = new float[count] {};
-		} else {
-			std::fill(data, data + count, 0.0f);
-		}
-		data[x] = 1.0f;
-	}
 	float *data = nullptr;
 	size_t size = 0;
 	ivec3 dim{};  // Dimensions the data should be interpreted at. Will tag along on the ride.
 };
 
-std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, int setSize);
-
-inline std::vector<int> GetFullSet(int count) {
-	std::vector<int> all;
-	all.reserve(count);
-	for (int i = 0; i < count; i++) {
-		all.push_back(i);
-	}
-	return all;
-}
+std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, size_t setSize);
+std::vector<int> GetFullSet(size_t count);
 
 /*
 Tensor LoadImageAsTensor(std::string path, bool monochrome) {

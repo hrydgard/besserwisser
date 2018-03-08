@@ -5,12 +5,26 @@
 // Used to sum up the results of each minibatch before updating the weights.
 // If we multithread this, we'll want one gradientSum vector per core, and sum them
 // all up at the end.
-void Layer::AccumulateGradientSum() {
-	Accumulate(gradientSum, gradient, numGradients);
+
+void FcLayer::Initialize() {
+	data = new float[numData];
+	numWeights = numData * numInputs;
+	weights = new float[numWeights]{};
+	numGradients = numInputs;
+	gradient = new float[numGradients]{};  // Here we'll accumulate gradients before we do the adjust.
+	GaussianNoise(weights, numWeights, network_->hyperParams.weightInitScale);
 }
 
-void Layer::ScaleGradientSum(float factor) {
-	ScaleInPlace(gradientSum, factor, numGradients);
+void FcLayer::ClearDeltaWeightSum() {
+	if (!deltaWeightSum) {
+		// We must be training.
+		deltaWeightSum = new float[numWeights];
+	}
+	memset(deltaWeightSum, 0, numWeights * sizeof(float));
+}
+
+void FcLayer::ScaleDeltaWeightSum(float factor) {
+	ScaleInPlace(deltaWeightSum, factor, numWeights);
 }
 
 void FcLayer::Forward(const float *input) {
@@ -32,12 +46,27 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 		// of the regularization function, which turns out to be very simple.
 		// Also note that we regularize the biases if they've been baked into weights, we don't care.
 		// The literature says that it really doesn't seem to matter but is unclear on why.
-		//for (int x = 0; x < numInputs; x++)
-		//	gradient[offset + x] = prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
 
-		// A = x*B + y*C
-		SumScaledVectors(gradient + offset, prev_data, next_gradient[y], weights + offset, regStrength, numInputs);
+		//for (int x = 0; x < numInputs; x++)
+		//	deltaWeightSum[offset + x] += prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
+		AccumulateScaledVectors(deltaWeightSum + offset, prev_data, next_gradient[y], weights + offset, regStrength, numInputs);
 	}
+}
+
+float FcLayer::GetRegularizationLoss() {
+	// Simple L2 norm.
+	// The derivative is used in Backward() so if you change this,
+	// gotta change there too.
+	return SumSquaresAVX(weights, numWeights);
+}
+
+void FcLayer::UpdateWeights(float trainingSpeed) {
+	// Simple gradient descent. Should try with momentum etc as well.
+	SaxpyAVX(numWeights, -trainingSpeed, deltaWeightSum, weights);
+	/*
+	for (int i = 0; i < layer->numWeights; i++)
+		layer->weights[i] -= layer->gradientSum[i] * speed;
+	*/
 }
 
 void SVMLossLayer::Forward(const float *input) {
@@ -96,9 +125,9 @@ void ReluLayer::Forward(const float *input) {
 	}
 }
 
-void ReluLayer::Backward(const float *prev_data, const float *input) {
+void ReluLayer::Backward(const float *prev_data, const float *next_gradient) {
 	for (int i = 0; i < numData; i++) {
-		gradient[i] = data[i] > 0.0f ? input[i] : 0.0f;
+		gradient[i] = prev_data[i] > 0.0f ? next_gradient[i] : 0.0f;
 	}
 }
 
@@ -113,4 +142,11 @@ void Relu6Layer::Backward(const float *prev_data, const float *input) {
 	for (int i = 0; i < numData; i++) {
 		gradient[i] = data[i] > 6.0f ? 0.0f : (data[i] > 0.0f ? input[i] : 0.0f);
 	}
+}
+
+void ConvLayer::Forward(const float *input) {
+
+}
+
+void ConvLayer::Backward(const float *prev_data, const float *input) {
 }

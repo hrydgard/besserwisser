@@ -46,7 +46,7 @@ float DotAVX(const float *a, const float *b, size_t size) {
 		__m256 sumWide1 = _mm256_setzero_ps();
 		__m256 sumWide2 = _mm256_setzero_ps();
 		while (size >= 16) {
-#if 0
+#if 1
 			sumWide1 = _mm256_add_ps(sumWide1, _mm256_mul_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b)));
 			sumWide2 = _mm256_add_ps(sumWide2, _mm256_mul_ps(_mm256_loadu_ps(a + 8), _mm256_loadu_ps(b + 8)));
 #else
@@ -125,11 +125,6 @@ float SumSquaresAVX(const float *a, size_t size) {
 	return sum;
 }
 
-void Saxpy(size_t n, float a, const float *x, float *y) {
-	for (int i = 0; i < n; i++)
-		y[i] = a*x[i] + y[i];
-}
-
 void SaxpyAVX(size_t size, float a, const float *x, float *y) {
 	__m256 factor = _mm256_set1_ps(a);
 	while (size >= 8) {
@@ -143,21 +138,22 @@ void SaxpyAVX(size_t size, float a, const float *x, float *y) {
 		y[i] = a*x[i] + y[i];
 }
 
-void SumScaledVectors(float *d, const float *a, float factorA, const float *b, float factorB, size_t size) {
+void AccumulateScaledVectors(float *d, const float *a, float factorA, const float *b, float factorB, size_t size) {
 	__m256 factorAwide = _mm256_set1_ps(factorA);
 	__m256 factorBwide = _mm256_set1_ps(factorB);
 	while (size >= 8) {
+		__m256 prev = _mm256_load_ps(d);
 		__m256 sum = _mm256_add_ps(
 			_mm256_mul_ps(factorAwide, _mm256_load_ps(a)),
 			_mm256_mul_ps(factorBwide, _mm256_load_ps(b)));
-		_mm256_store_ps(d, sum);
+		_mm256_store_ps(d, _mm256_add_ps(prev, sum));
 		a += 8;
 		b += 8;
 		d += 8;
 		size -= 8;
 	}
 	for (int i = 0; i < size; i++)
-		d[i] = factorA * a[i] + factorB * b[i];
+		d[i] += factorA * a[i] + factorB * b[i];
 }
 
 void Accumulate(float *a, const float *b, size_t size) {
@@ -242,23 +238,33 @@ void GaussianNoise(float *data, size_t size, float scale) {
 	}
 }
 
-std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, int setSize) {
+std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, size_t setSize) {
 	std::vector<int> all;
 	for (int i = 0; i < count; i++) {
 		all.push_back(i);
 	}
 	std::random_shuffle(all.begin(), all.end());
 
-	int setCount = count / setSize;
+	size_t setCount = count / setSize;
 	std::vector<std::vector<int>> sets(setCount);
-	for (int i = 0; i < setCount; i++) {
+	for (size_t i = 0; i < setCount; i++) {
 		sets[i].reserve(setSize);
-		for (int j = 0; j < setSize; j++) {
+		for (size_t j = 0; j < setSize; j++) {
 			sets[i].push_back(all[i * setSize + j]);
 		}
 	}
 	return sets;
 }
+
+std::vector<int> GetFullSet(size_t count) {
+	std::vector<int> all;
+	all.reserve(count);
+	for (int i = 0; i < count; i++) {
+		all.push_back(i);
+	}
+	return all;
+}
+
 
 void PrintFloatVector(const char *name, const float *x, size_t size, size_t maxSize) {
 	printf("%s: (", name);
@@ -275,7 +281,7 @@ void PrintFloatVector(const char *name, const float *x, size_t size, size_t maxS
 	}
 }
 
-void DiffVectors(const float *a, const float *b, size_t size, float tolerance, size_t maxDiffCount) {
+int DiffVectors(const float *a, const float *b, size_t size, float tolerance, size_t maxDiffCount) {
 	int diffCount = 0;
 	for (size_t i = 0; i < size; i++) {
 		float diff = fabsf(a[i] - b[i]);
@@ -291,4 +297,5 @@ void DiffVectors(const float *a, const float *b, size_t size, float tolerance, s
 	if (diffCount == 0) {
 		printf("vectors equal (of size %d)!\n", (int)size);
 	}
+	return diffCount;
 }

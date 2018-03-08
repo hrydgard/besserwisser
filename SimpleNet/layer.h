@@ -29,7 +29,6 @@ public:
 
 	virtual ~Layer() {
 		delete[] data;
-		delete[] weights;
 		delete[] gradient;
 	}
 
@@ -42,29 +41,23 @@ public:
 			memset(gradient, 0, sizeof(gradient[0]) * numGradients);
 		}
 	}
-	void AccumulateGradientSum();
-	void ScaleGradientSum(float factor);
+	virtual void ClearDeltaWeightSum() {}
+	virtual void ScaleDeltaWeightSum(float factor) {}
+	virtual float GetRegularizationLoss() { return 0.0f; }
+	virtual void UpdateWeights(float trainingSpeed) {}
 
 	LayerType type;
-	ivec3 inputDim{};  // How the input should be interpreted. Important for some layer types.
 
 	int numInputs = 0;
 	int numData = 0;
-	int numWeights = 0;  // for convenience.
 	int numGradients = 0;
 
 	// State. There's way too much state! Possibly should be separated out so the rest
 	// can be shared between threads or something.
 	float *data = nullptr;  // Vector.
 
-	// Trained. Only read from in forward pass, updated after computing gradients.
-	float *weights = nullptr;  // Matrix (inputs * neurons)
-
 	// Gradient to backpropagate to the next step.
 	float *gradient = nullptr;
-
-	// Used in batch training only to keep intermediate data.
-	float *gradientSum = nullptr;
 
 	// Truth. Used by softmaxloss and svmloss layers.
 	int label = -1;
@@ -108,12 +101,32 @@ public:
 class FcLayer : public Layer {
 public:
 	FcLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::FC; }
+	~FcLayer() {
+		delete[] weights;
+		delete[] deltaWeightSum;
+	}
+
+	void Initialize() override;
+
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
+
+	void ClearDeltaWeightSum() override;
+	void ScaleDeltaWeightSum(float factor) override;
+
+	float GetRegularizationLoss() override;
+	void UpdateWeights(float trainingSpeed) override;
+
+	int numWeights = 0;  // for convenience.
+
+	// Trained. Only read from in forward pass, updated after computing gradients.
+	float *weights = nullptr;  // Matrix (inputs * neurons)
+
+	// Used in batch training only to keep intermediate data.
+	float *deltaWeightSum = nullptr;
 };
 
-// Outputs the loss as a single float, and caches data in weights to be able to perform
-// back propagation.
+// Outputs the loss as a single float.
 class SVMLossLayer : public Layer {
 public:
 	SVMLossLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::SVM_LOSS; }
@@ -121,8 +134,7 @@ public:
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
-// Outputs the loss as a single float, and caches data in weights to be able to perform
-// back propagation.
+// Outputs the loss as a single float.
 class SoftMaxLayer : public Layer {
 	SoftMaxLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::SOFTMAX_LOSS; }
 	void Forward(const float *input) override;
@@ -130,7 +142,8 @@ class SoftMaxLayer : public Layer {
 };
 
 // Convolutional image layer.
-/*
 class ConvLayer : public Layer {
 	ConvLayer(NeuralNetwork *network) : Layer(network) {}
-};*/
+	void Forward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
+};
