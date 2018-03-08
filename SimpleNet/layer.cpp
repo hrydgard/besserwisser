@@ -25,15 +25,18 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 
 	// Partial derivative.
 	for (int y = 0; y < numData; y++) {
-		for (int x = 0; x < numInputs; x++) {
-			int index = y * numInputs + x;
-			// The derivative of a multiplication with respect to a variable is the other variable.
-			// Then do the chain rule multiplication. Remember to add on the partial derivative
-			// of the regularization function, which turns out to be very simple.
-			// Also note that we regularize the biases if they've been baked into weights, we don't care.
-			// The literature says that it really doesn't seem to matter but is unclear on why.
-			gradient[index] = prev_data[x] * next_gradient[y] + regStrength * weights[index];
-		}
+		int offset = y * numInputs;
+
+		// The derivative of a multiplication with respect to a variable is the other variable.
+		// Then do the chain rule multiplication. Remember to add on the partial derivative
+		// of the regularization function, which turns out to be very simple.
+		// Also note that we regularize the biases if they've been baked into weights, we don't care.
+		// The literature says that it really doesn't seem to matter but is unclear on why.
+		//for (int x = 0; x < numInputs; x++)
+		//	gradient[offset + x] = prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
+
+		// A = x*B + y*C
+		SumScaledVectors(gradient + offset, prev_data, next_gradient[y], weights + offset, regStrength, numInputs);
 	}
 }
 

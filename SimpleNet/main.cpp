@@ -137,10 +137,11 @@ void TrainNetworkFast(NeuralNetwork &network, const Subset &subset, float speed)
 		if (layer->type != LayerType::FC)
 			continue;
 		// Simple gradient descent. Should try with momentum etc as well.
-		// Saxpy(size, -speed, gradient, layer->weights);
-		for (int i = 0; i < layer->numGradients; i++) {
+		SaxpyAVX(layer->numGradients, -speed, layer->gradientSum, layer->weights);
+		/*
+		for (int i = 0; i < layer->numGradients; i++)
 			layer->weights[i] -= layer->gradientSum[i] * speed;
-		}
+		*/
 	}
 }
 
@@ -194,7 +195,7 @@ int main() {
 	relu.numNeurons = 100;
 	network.layers.push_back(&relu);
 
-	NeuralLayer fcLayer{ LayerType::FC, ivec3{ 32,32,1 } };
+	NeuralLayer linearLayer{ LayerType::FC, ivec3{ 32,32,1 } };
 	fcLayer.numInputs = 100;
 	fcLayer.numNeurons = 10;
 	network.layers.push_back(&fcLayer);
@@ -255,7 +256,11 @@ int main() {
 	float trainingSpeed = 0.005f;
 
 	int rounds = (int)subsets.size();
-	for (int epoch = 0; epoch < 20; epoch++) {
+	for (int epoch = 0; epoch < 100; epoch++) {
+		// Decay trainingspeed every 10 epochs. TODO: Make tunable.
+		if (epoch != 0 && (epoch % 10 == 0))
+			trainingSpeed *= 0.5f;
+
 		printf("Epoch %d, trainingSpeed=%f\n", epoch + 1, trainingSpeed);
 		for (int i = 0; i < rounds; i++) {
 			int subsetIndex = i % subsets.size();

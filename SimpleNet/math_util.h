@@ -31,9 +31,11 @@ float SumSquaresAVX(const float *a, size_t size);
 void Accumulate(float *a, const float *b, size_t size);
 void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size);
 void ScaleInPlace(float *a, float factor, size_t size);
+void SumScaledVectors(float *sum, const float *a, float factorA, const float *b, float factorB, size_t size);
 
 // LAPACK stuff
 void Saxpy(size_t n, float a, const float *x, float *y);
+void SaxpyAVX(size_t size, float a, const float *x, float *y);
 
 // NOTE: This can return -1 if all the input is INFINITY or if there are NaNs.
 int FindMinIndex(const float *data, size_t size);

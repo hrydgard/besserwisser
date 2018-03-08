@@ -130,9 +130,34 @@ void Saxpy(size_t n, float a, const float *x, float *y) {
 		y[i] = a*x[i] + y[i];
 }
 
-void SaxpySSE(size_t n, float a, const float *x, float *y) {
-	for (int i = 0; i < n; i++)
+void SaxpyAVX(size_t size, float a, const float *x, float *y) {
+	__m256 factor = _mm256_set1_ps(a);
+	while (size >= 8) {
+		__m256 sum = _mm256_add_ps(_mm256_mul_ps(factor, _mm256_load_ps(x)), _mm256_load_ps(y));
+		_mm256_store_ps(y, sum);
+		x += 8;
+		y += 8;
+		size -= 8;
+	}
+	for (int i = 0; i < size; i++)
 		y[i] = a*x[i] + y[i];
+}
+
+void SumScaledVectors(float *d, const float *a, float factorA, const float *b, float factorB, size_t size) {
+	__m256 factorAwide = _mm256_set1_ps(factorA);
+	__m256 factorBwide = _mm256_set1_ps(factorB);
+	while (size >= 8) {
+		__m256 sum = _mm256_add_ps(
+			_mm256_mul_ps(factorAwide, _mm256_load_ps(a)),
+			_mm256_mul_ps(factorBwide, _mm256_load_ps(b)));
+		_mm256_store_ps(d, sum);
+		a += 8;
+		b += 8;
+		d += 8;
+		size -= 8;
+	}
+	for (int i = 0; i < size; i++)
+		d[i] = factorA * a[i] + factorB * b[i];
 }
 
 void Accumulate(float *a, const float *b, size_t size) {
