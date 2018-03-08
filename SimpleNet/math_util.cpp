@@ -91,6 +91,30 @@ float SumAVX(const float *a, size_t size) {
 	return sum;
 }
 
+float SumSquaresAVX(const float *a, size_t size) {
+	float sum;
+	if (size >= 16) {
+		__m256 sumWide1 = _mm256_setzero_ps();
+		__m256 sumWide2 = _mm256_setzero_ps();
+		while (size >= 16) {
+			__m256 x = _mm256_loadu_ps(a);
+			__m256 y = _mm256_loadu_ps(a + 8);
+			sumWide1 = _mm256_add_ps(sumWide1, _mm256_mul_ps(x, x));
+			sumWide2 = _mm256_add_ps(sumWide2, _mm256_mul_ps(y, y));
+			a += 16;
+			size -= 16;
+		}
+		sum = HorizontalSum(_mm256_add_ps(sumWide1, sumWide2));
+	} else {
+		sum = 0.0f;
+	}
+	for (size_t i = 0; i < size; i++) {
+		float x = a[i];
+		sum += x * x;
+	}
+	return sum;
+}
+
 void Saxpy(size_t n, float a, const float *x, float *y) {
 	for (int i = 0; i < n; i++)
 		y[i] = a*x[i] + y[i];

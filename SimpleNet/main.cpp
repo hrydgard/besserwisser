@@ -41,10 +41,10 @@ float ComputeDataLoss(NeuralNetwork &network, const DataSet &dataSet, int index,
 	Layer *finalLayer = network.layers.back();
 	// Last layer must be a loss layer.
 	assert(finalLayer->type == LayerType::SVM_LOSS || finalLayer->type == LayerType::SOFTMAX_LOSS);
-	network.layers[0]->neurons = dataSet.images[index].data;
+	network.layers[0]->data = dataSet.images[index].data;
 	finalLayer->label = dataSet.labels[index];
 	network.RunForwardPass();
-	return finalLayer->neurons[0];
+	return finalLayer->data[0];
 }
 
 float ComputeRegularizationLoss(NeuralNetwork &network) {
@@ -52,16 +52,17 @@ float ComputeRegularizationLoss(NeuralNetwork &network) {
 	// Note that its gradient will be simply lambdaX.
 	// TODO: AVX!
 	double regSum = 0.0;
-	float regStrength = 0.5f * network.hyperParams.regStrength;
 	for (size_t i = 0; i < network.layers.size(); i++) {
 		Layer &layer = *network.layers[i];
 		if (layer.type == LayerType::FC) {
-			for (size_t j = 0; j < layer.numWeights; j++) {
-				regSum += regStrength * sqr(layer.weights[j]);
-			}
+			/*
+			for (size_t j = 0; j < layer.numWeights; j++)
+				regSum += sqr(layer.weights[j]);
+			*/
+			regSum += SumSquaresAVX(layer.weights, layer.numWeights);
 		}
 	}
-	return (float)regSum;
+	return 0.5f * network.hyperParams.regStrength * (float)regSum;
 }
 
 float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunStats *stats = nullptr) {
@@ -77,7 +78,7 @@ float ComputeLossOverSubset(NeuralNetwork &network, const Subset &subset, RunSta
 		int index = subset.indices[i];
 		float loss = ComputeDataLoss(network, *subset.dataSet, index, stats);
 		if (stats) {
-			int label = FindMaxIndex(scoreLayer->neurons, scoreLayer->numNeurons);
+			int label = FindMaxIndex(scoreLayer->data, scoreLayer->numData);
 			assert(label >= 0);
 			if (label == subset.dataSet->labels[index]) {
 				stats->correct++;
@@ -126,7 +127,7 @@ void UpdateLayerFast(NeuralNetwork &network, const Subset &subset, Layer *layer,
 	}
 }
 
-void UpdateLayerBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float speed) {
+void TrainLayerBruteForce(NeuralNetwork &network, const Subset &subset, Layer *layer, float speed) {
 	size_t size = layer->numWeights;
 	float *gradient = new float[size];
 	ComputeGradientBruteForce(network, subset, layer, gradient);
@@ -159,7 +160,7 @@ int main() {
 	ImageLayer imageLayer(&network);
 	imageLayer.inputDim = ivec3{ 28, 28, 1 };
 	imageLayer.numInputs = 0;
-	imageLayer.numNeurons = 28 * 28 + 1;  // + 1 for bias trick
+	imageLayer.numData = 28 * 28 + 1;  // + 1 for bias trick
 	network.layers.push_back(&imageLayer);
 
 	/*
@@ -180,12 +181,12 @@ int main() {
 	*/
 	FcLayer linearLayer(&network);
 	linearLayer.numInputs = 28 * 28 + 1;
-	linearLayer.numNeurons = 10;
+	linearLayer.numData = 10;
 	network.layers.push_back(&linearLayer);
 
 	SVMLossLayer lossLayer(&network);
 	lossLayer.numInputs = 10;
-	lossLayer.numNeurons = 1;
+	lossLayer.numData = 1;
 	network.layers.push_back(&lossLayer);
 
 	network.InitializeNetwork();
@@ -227,20 +228,21 @@ int main() {
 
 	float trainingSpeed = 0.05f;
 
-	int rounds = 40;
+	int rounds = 200;
 	for (int i = 0; i < rounds; i++) {
-		printf("Round %d/%d\n", i + 1, rounds);
+		int subsetIndex = i % subsets.size();
+		printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
 		// Train on different subsets each round (stochastic gradient descent)
-		subset.indices = subsets[i % subsets.size()];
+		subset.indices = subsets[subsetIndex];
 		float loss = ComputeLossOverSubset(network, subset);
 
-		UpdateLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
+		TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
 		// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
 
 		stats = {};
 		float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
 
-		PrintFloatVector("Neurons", network.layers.back()->neurons, network.layers.back()->numNeurons);
+		PrintFloatVector("Neurons", network.layers.back()->data, network.layers.back()->numData);
 		printf("Loss before: %0.3f\n", loss);
 		printf("Loss after: %0.3f\n", lossAfterTraining);
 		stats.Print();

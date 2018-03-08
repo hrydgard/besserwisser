@@ -8,8 +8,8 @@ void Layer::AccumulateGradientSum() {
 
 void FcLayer::Forward(const float *input) {
 	// Just a matrix*vector multiplication.
-	for (int y = 0; y < numNeurons; y++) {
-		neurons[y] = DotAVX(input, &weights[y * numInputs], numInputs);
+	for (int y = 0; y < numData; y++) {
+		data[y] = DotAVX(input, &weights[y * numInputs], numInputs);
 	}
 }
 
@@ -17,7 +17,7 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 	float regStrength = network_->hyperParams.regStrength;
 
 	// Partial derivative
-	for (int y = 0; y < numNeurons; y++) {
+	for (int y = 0; y < numData; y++) {
 		for (int x = 0; x < numInputs; x++) {
 			int index = y * numInputs + x;
 			// The derivative of a multiplication with respect to a variable is the other variable.
@@ -37,7 +37,7 @@ void SVMLossLayer::Forward(const float *input) {
 			sum += std::max(0.0f, input[i] - input[label] + 1.0f);
 		}
 	}
-	neurons[0] = sum;
+	data[0] = sum;
 }
 
 void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) {
@@ -70,7 +70,7 @@ void SoftMaxLayer::Forward(const float *input) {
 	for (size_t i = 0; i < numInputs; i++) {
 		expSum += expf(input[i]);
 	}
-	neurons[0] = -logf(expf(input[label]) / expSum);
+	data[0] = -logf(expf(input[label]) / expSum);
 }
 
 void SoftMaxLayer::Backward(const float *prev_data, const float *next_gradient) {
@@ -81,13 +81,13 @@ void SoftMaxLayer::Backward(const float *prev_data, const float *next_gradient) 
 
 void ReluLayer::Forward(const float *input) {
 	// TODO: This can be very easily SIMD'd.
-	for (int i = 0; i < numNeurons; i++) {
-		neurons[i] = std::max(0.0f, input[i]);
+	for (int i = 0; i < numData; i++) {
+		data[i] = std::max(0.0f, input[i]);
 	}
 }
 
 void ReluLayer::Backward(const float *prev_data, const float *input) {
-	for (int i = 0; i < numNeurons; i++) {
-		gradient[i] = neurons[i] > 0.0f ? input[i] : 0.0f;
+	for (int i = 0; i < numData; i++) {
+		gradient[i] = data[i] > 0.0f ? input[i] : 0.0f;
 	}
 }
