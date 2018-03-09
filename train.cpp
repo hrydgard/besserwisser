@@ -1,3 +1,6 @@
+#include <vector>
+#include <memory>
+
 #include "train.h"
 #include "layer.h"
 #include "network.h"
@@ -56,9 +59,9 @@ float ComputeLossOverMinibatch(NeuralNetwork &network, const MiniBatch &subset, 
 	return totalLoss;
 }
 
-// TODO: Change this to compare directly to the most recently computed gradient
-// Computes the sum of gradients from a minibatch.
-void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer *layer, float *gradient) {
+// Utility used for validation of the real training code. Will simply do a brute force gradient calculation
+// by disturbing and resetting every training weight of the chosen layer (finite difference method).
+static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer *layer, float *gradient) {
 	assert(layer->type == LayerType::FC);
 	FcLayer *fcLayer = dynamic_cast<FcLayer *>(layer);
 
@@ -81,9 +84,9 @@ void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBatch &su
 	PrintFloatVector("Gradient", gradient, size, 10);
 }
 
-// Train a single layer using a minibatch.
-
-void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed) {
+// Trains all the weights in a network by running both a forward and a backward pass for every item
+// in the minibatch. Hyperparameters for training are configured directly on the network object.
+static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed) {
 	network.ClearDeltaWeightSum();
 	for (auto index : subset.indices) {
 		network.layers[0]->data = subset.dataSet->images[index].data;
@@ -99,7 +102,9 @@ void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, fl
 	}
 }
 
-void TrainLayerBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer *layer, float speed) {
+// Trains a single layer of a network using ComputeDeltaWeightSumBruteForce. This does work just fine
+// but is incredibly slow. Not really useful once you've validated all your back propagation.
+static void TrainLayerBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer *layer, float speed) {
 	// Hacky
 	FcLayer *fcLayer = (FcLayer *)layer;
 
@@ -112,4 +117,82 @@ void TrainLayerBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer
 		fcLayer->weights[i] -= gradient[i] * speed;
 	}
 	delete[] gradient;
+}
+
+
+bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet &dataSet) {
+	MiniBatch subset;
+	subset.dataSet = &dataSet;
+	subset.indices = { 1, 2 };
+
+	// Run the network first forward then backwards, then compute the brute force gradient and compare.
+	printf("Fast gradient (b)...\n");
+	network.ClearDeltaWeightSum();
+	for (auto index : subset.indices) {
+		network.layers[0]->data = subset.dataSet->images[index].data;
+		network.layers.back()->label = subset.dataSet->labels[index];
+		network.RunForwardPass();
+		network.RunBackwardPass();  // Accumulates delta weights.
+	}
+	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
+
+	std::unique_ptr<float[]> deltaWeightSum(new float[testLayer->numWeights]{});
+	printf("Computing test gradient over %d examples by brute force (a)...\n", (int)subset.indices.size());
+	ComputeDeltaWeightSumBruteForce(network, subset, testLayer, deltaWeightSum.get());
+	int diffCount = DiffVectors(deltaWeightSum.get(), testLayer->deltaWeightSum, testLayer->numWeights, 0.01f, 200);
+	printf("Done with test.\n");
+	if (diffCount > 1000) {
+		return false;
+	}
+	return true;  // probably ok.
+}
+
+void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs) {
+	float trainingSpeed = network.hyperParams.trainingSpeed;
+
+	int subsetSize = network.hyperParams.miniBatchSize;
+	MiniBatch testSubset;
+	testSubset.dataSet = &testSet;
+	testSubset.indices = GetFullSet(testSubset.dataSet->images.size());
+
+	RunStats stats;
+
+	std::vector<std::vector<int>> subsets;
+	for (int epoch = 0; epoch < maxEpochs; epoch++) {
+		// Generate a new bunch of subsets for each epoch. We could also do fun things
+		// like example augmentation (distorting images, etc).
+		subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
+
+		// Decay training speed every N epochs. Tunable through network.hyperParams.
+		if (epoch != 0 && (epoch % network.hyperParams.trainingEpochsSlowdown == 0))
+			trainingSpeed *= network.hyperParams.trainingSlowdownFactor;
+
+		printf("Epoch %d, trainingSpeed=%f\n", epoch + 1, trainingSpeed);
+		for (int i = 0; i < (int)subsets.size(); i++) {
+			MiniBatch subset;
+			subset.dataSet = &trainingSet;
+			// Train on different subsets each round (stochastic gradient descent)
+			subset.indices = subsets[i];
+
+			// printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
+			//float loss = ComputeLossOverSubset(network, subset);
+
+			// TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
+			TrainNetworkOnMinibatch(network, subset, trainingSpeed);
+			// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
+			/*
+			stats = {};
+			float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
+
+			PrintFloatVector("Neurons", network.layers.back()->data, network.layers.back()->numData);
+			printf("Loss before: %0.3f\n", loss);
+			printf("Loss after: %0.3f\n", lossAfterTraining);
+			stats.Print();*/
+		}
+		printf("Running on testset (%d images)...\n", (int)testSubset.dataSet->images.size());
+		stats = {};
+		float lossOnTestset = ComputeLossOverMinibatch(network, testSubset, &stats);
+		printf("Loss on testset: %f\n", lossOnTestset);
+		stats.Print();
+	}
 }
