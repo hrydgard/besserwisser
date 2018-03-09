@@ -47,6 +47,56 @@ bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet
 	return true;  // probably ok.
 }
 
+void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs = 100) {
+	float trainingSpeed = network.hyperParams.trainingSpeed;
+
+	int subsetSize = network.hyperParams.miniBatchSize;
+	MiniBatch testSubset;
+	testSubset.dataSet = &testSet;
+	testSubset.indices = GetFullSet(testSubset.dataSet->images.size());
+
+	RunStats stats;
+
+	std::vector<std::vector<int>> subsets;
+	for (int epoch = 0; epoch < maxEpochs; epoch++) {
+		// Generate a new bunch of subsets for each epoch. We could also do fun things
+		// like example augmentation (distorting images, etc).
+		subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
+
+		// Decay training speed every N epochs. Tunable through network.hyperParams.
+		if (epoch != 0 && (epoch % network.hyperParams.trainingEpochsSlowdown == 0))
+			trainingSpeed *= network.hyperParams.trainingSlowdownFactor;
+
+		printf("Epoch %d, trainingSpeed=%f\n", epoch + 1, trainingSpeed);
+		for (int i = 0; i < (int)subsets.size(); i++) {
+			MiniBatch subset;
+			subset.dataSet = &trainingSet;
+			// Train on different subsets each round (stochastic gradient descent)
+			subset.indices = subsets[i];
+
+			// printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
+			//float loss = ComputeLossOverSubset(network, subset);
+
+			// TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
+			TrainNetworkOnMinibatch(network, subset, trainingSpeed);
+			// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
+			/*
+			stats = {};
+			float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
+
+			PrintFloatVector("Neurons", network.layers.back()->data, network.layers.back()->numData);
+			printf("Loss before: %0.3f\n", loss);
+			printf("Loss after: %0.3f\n", lossAfterTraining);
+			stats.Print();*/
+		}
+		printf("Running on testset (%d images)...\n", (int)testSubset.dataSet->images.size());
+		stats = {};
+		float lossOnTestset = ComputeLossOverMinibatch(network, testSubset, &stats);
+		printf("Loss on testset: %f\n", lossOnTestset);
+		stats.Print();
+	}
+}
+
 // simple architectures:
 // (note: No RELU before the loss function)
 // INPUT -> FC -> RELU -> FC -> RELU -> FC -> LOSS
@@ -119,76 +169,17 @@ int main(int argc, const char *argv[]) {
 
 	static const char *labelNames[10] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 
-	int subsetSize = network.hyperParams.miniBatchSize;
-
-	RunStats stats;
-
-	MiniBatch testSubset;
-	testSubset.dataSet = &testSet;
-	testSubset.indices = GetFullSet(testSubset.dataSet->images.size());
-
 	if (!RunBruteForceTest(network, testLayer, trainingSet)) {
 		network.layers[0]->data = nullptr;  // Don't want to autodelete this..
 		while (true);
 		return 0;
 	}
 
-	float trainingSpeed = network.hyperParams.trainingSpeed;
-
-	std::vector<std::vector<int>> subsets;
-	for (int epoch = 0; epoch < 100; epoch++) {
-		// Generate a new bunch of subsets for each epoch. We could also do fun things
-		// like example augmentation (distorting images, etc).
-		subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
-
-		// Decay training speed every N epochs. Tunable through network.hyperParams.
-		if (epoch != 0 && (epoch % network.hyperParams.trainingEpochsSlowdown == 0))
-			trainingSpeed *= network.hyperParams.trainingSlowdownFactor;
-
-		printf("Epoch %d, trainingSpeed=%f\n", epoch + 1, trainingSpeed);
-		for (int i = 0; i < (int)subsets.size(); i++) {
-			MiniBatch subset;
-			subset.dataSet = &trainingSet;
-			// Train on different subsets each round (stochastic gradient descent)
-			subset.indices = subsets[i];
-
-			// printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
-			//float loss = ComputeLossOverSubset(network, subset);
-
-			// TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
-			TrainNetworkOnMinibatch(network, subset, trainingSpeed);
-			// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
-			/*
-			stats = {};
-			float lossAfterTraining = ComputeLossOverSubset(network, subset, &stats);
-
-			PrintFloatVector("Neurons", network.layers.back()->data, network.layers.back()->numData);
-			printf("Loss before: %0.3f\n", loss);
-			printf("Loss after: %0.3f\n", lossAfterTraining);
-			stats.Print();*/
-		}
-		printf("Running on testset (%d images)...\n", (int)testSubset.dataSet->images.size());
-		stats = {};
-		float lossOnTestset = ComputeLossOverMinibatch(network, testSubset, &stats);
-		printf("Loss on testset: %f\n", lossOnTestset);
-		stats.Print();
-	}
+	// TODO: Add support for separated dev and test sets if available (or generate them).
+	TrainAndEvaluateNetworkStochastic(network, trainingSet, testSet);
 
 	printf("Done.\n");
 	
 	while (true);
-	/*
-	// Evaluate network on the test set.
-	float totalLoss = 0.0f;
-	for (int i = 0; i < testImages.size(); i++) {
-		assert(imageLayer.numNeurons == testImages[i].size);
-		imageLayer.neurons = testImages[i].data;
-		RunNetwork(network);
-		// int inferredLabel = Judge(fcLayer.neurons, 10);
-		float loss = network.lossFunction(fcLayer.neurons, 10, testLabels[i]);
-		totalLoss += loss;
-	}
-	totalLoss /= trainLabels.size();
-	*/
 	return 0;
 }
