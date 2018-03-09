@@ -12,6 +12,9 @@ public:
 		float regStrength = 0.01f;
 		float weightInitScale = 0.05f;
 		int miniBatchSize = 32;
+		float trainingSpeed = 0.015f;
+		int trainingEpochsSlowdown = 10;
+		float trainingSlowdownFactor = 0.75f;
 	};
 	HyperParams hyperParams;
 

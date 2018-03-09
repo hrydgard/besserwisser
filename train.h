@@ -14,7 +14,7 @@ struct DataSet {
 
 // Defines a subset of a dataset.
 struct MiniBatch {
-	DataSet *dataSet;
+	const DataSet *dataSet;
 	std::vector<int> indices;
 };
 
