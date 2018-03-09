@@ -25,20 +25,24 @@
 // INPUT -> FC -> RELU -> FC -> LOSS
 // INPUT -> FC -> LOSS
 
-int main() {
+int main(int argc, const char *argv[]) {
+	std::string mnist_root = "";
+	if (argc > 1)
+		mnist_root = std::string(argv[1]);
+
 	// http://yann.lecun.com/exdb/mnist/
 	// The expected error rate for a pure linear classifier is 12% and we achieve that
 	// with both fast back propagation and of course brute force.
 	// The expected error rate for a 2-layer with 100 nodes is 2% which we do achieve
 	// with the right hyperparameters!
 	DataSet trainingSet;
-	trainingSet.images = LoadMNISTImages("C:/dev/MNIST/train-images.idx3-ubyte");
-	trainingSet.labels = LoadMNISTLabels("C:/dev/MNIST/train-labels.idx1-ubyte");
+	trainingSet.images = LoadMNISTImages(mnist_root + "/train-images.idx3-ubyte");
+	trainingSet.labels = LoadMNISTLabels(mnist_root + "/train-labels.idx1-ubyte");
 	assert(trainingSet.images.size() == trainingSet.images.size());
 
 	DataSet testSet;
-	testSet.images = LoadMNISTImages("C:/dev/MNIST/t10k-images.idx3-ubyte");
-	testSet.labels = LoadMNISTLabels("C:/dev/MNIST/t10k-labels.idx1-ubyte");
+	testSet.images = LoadMNISTImages(mnist_root + "/t10k-images.idx3-ubyte");
+	testSet.labels = LoadMNISTLabels(mnist_root + "/t10k-labels.idx1-ubyte");
 	assert(testSet.images.size() == testSet.images.size());
 
 	NeuralNetwork network;

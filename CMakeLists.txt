@@ -1,3 +1,5 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
+
 project (simplenet)
  
 set(FILES

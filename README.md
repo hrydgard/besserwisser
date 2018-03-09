@@ -11,7 +11,7 @@ Features working:
 	* Mini-batch training
 	* Multi-layer (fully connected) neural networks
 	* RELU and Sigmoid activation functions (RELU recommended)
-	* SVM loss function (SoftMax not yet working)
+	* SVM loss function
 	* Inference
 	* AVX acceleration of nearly all functionality
 
