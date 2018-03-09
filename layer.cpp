@@ -122,7 +122,7 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 	}
 }
 
-void SoftMaxLayer::Forward(const float *input) {
+void SoftMaxLossLayer::Forward(const float *input) {
 	float expSum = 0.0f;
 	for (size_t i = 0; i < numInputs; i++) {
 		expSum += expf(input[i]);
@@ -130,14 +130,19 @@ void SoftMaxLayer::Forward(const float *input) {
 	data[0] = -logf(expf(input[label]) / expSum);
 }
 
-void SoftMaxLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (size_t i = 0; i < numInputs; i++) {
-
-	}
-
+void SoftMaxLossLayer::Backward(const float *prev_data, const float *next_gradient) {
+	// There's no input gradient, we compute the original dL/dz gradient.
 	assert(!next_gradient);
-	// TODO: Implement. Forward should cache the p(k) values, computed in a loop. Could also recompute them from prev_data.
+
 	// http://cs231n.github.io/neural-networks-case-study/#together
+	// For simplicity, partially recompute the forward pass. This code isn't the bottleneck.
+	float expSum = 0.0f;
+	for (size_t i = 0; i < numInputs; i++) {
+		expSum += expf(prev_data[i]);
+	}
+	for (size_t i = 0; i < numInputs; i++) {
+		gradient[i] = expf(prev_data[i])/expSum - (label == i ? 1.0f : 0.0f);
+	}
 }
 
 void ActivationLayer::Initialize() {

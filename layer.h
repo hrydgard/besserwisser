@@ -158,9 +158,9 @@ public:
 };
 
 // What this computes is more correctly known as "Cross entropy loss"
-class SoftMaxLayer : public LossLayer {
+class SoftMaxLossLayer : public LossLayer {
 public:
-	SoftMaxLayer(NeuralNetwork *network) : LossLayer(network) { type = LayerType::SOFTMAX_LOSS; }
+	SoftMaxLossLayer(NeuralNetwork *network) : LossLayer(network) { type = LayerType::SOFTMAX_LOSS; }
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };

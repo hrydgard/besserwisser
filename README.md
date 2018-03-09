@@ -23,4 +23,16 @@ Future plans:
 	* Multi-threaded CPU training
 	* Convolutional nets
 
-To run the example, first run get-mnist.sh to get the MNIST dataset (or download it manually). If you're on Windows, get-mnist.sh will run under WSL.
+To run the example, first run get-mnist.sh to get the MNIST dataset (or download it manually). If you're on Windows, get-mnist.sh will run under WSL. Also make sure to run ```git submodule update --init --recursive``` before building.
+
+
+To build and run on Windows:
+
+  * With VS2017, use File->Open Folder to open as a CMake project.
+  * Choose x64-Release and to the right of that make sure to choose the right output to run.
+  * Ctrl+F5
+
+To build on other platforms:
+
+  * ```cmake .```
+	* make

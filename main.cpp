@@ -1,4 +1,10 @@
-﻿#include <cmath>
+﻿// Neural net code by Henrik Rydgård
+
+// A collection of useful links to understand this stuff:
+// CS231n (free Stanford course material): http://cs231n.github.io/
+// Debugging help: https://blog.slavv.com/37-reasons-why-your-neural-network-is-not-working-4020854bd607
+
+#include <cmath>
 #include <cstdint>
 #include <cassert>
 #include <string>
@@ -45,7 +51,7 @@ int main() {
 	imageLayer.numData = 28 * 28 + 1;  // + 1 for bias trick
 	network.layers.push_back(&imageLayer);
 
-#if 1
+#if 1  // 2-layer network
 	FcLayer hiddenLayer(&network);
 	hiddenLayer.numInputs = 28 * 28 + 1;
 	hiddenLayer.numData = 100;
