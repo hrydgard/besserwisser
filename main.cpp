@@ -36,6 +36,8 @@ int main(int argc, const char *argv[]) {
 	// with both fast back propagation and of course brute force.
 	// The expected error rate for a 2-layer with 100 nodes is 2% which we do achieve
 	// with the right hyperparameters!
+
+	printf("Loading MNIST...\n");
 	DataSet trainingSet;
 	trainingSet.images = LoadMNISTImages(mnist_root + "/train-images.idx3-ubyte");
 	trainingSet.labels = LoadMNISTLabels(mnist_root + "/train-labels.idx1-ubyte");
@@ -68,6 +70,18 @@ int main(int argc, const char *argv[]) {
 	activation.numData = hiddenLayer.numData;
 	network.layers.push_back(&activation);
 
+#if 0  // Extend to 3 layers. Does not seem to improve perf.
+	FcLayer hiddenLayer2(&network);
+	hiddenLayer2.numInputs = 100;
+	hiddenLayer2.numData = 100;
+	network.layers.push_back(&hiddenLayer2);
+
+	ReluLayer activation2(&network);
+	activation2.numInputs = hiddenLayer2.numData;
+	activation2.numData = hiddenLayer2.numData;
+	network.layers.push_back(&activation2);
+#endif
+
 	FcLayer linearLayer(&network);
 	linearLayer.numInputs = hiddenLayer.numData;
 	linearLayer.numData = 10;
@@ -90,13 +104,13 @@ int main(int argc, const char *argv[]) {
 
 	network.InitializeNetwork();
 
-	static const char *labelNames[10] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-
+#if 0
 	if (!RunBruteForceTest(network, testLayer, trainingSet)) {
 		network.layers[0]->data = nullptr;  // Don't want to autodelete this..
 		while (true);  // wait for Ctrl+C.
 		return 0;
 	}
+#endif
 
 	// TODO: Add support for separated dev and test sets if available (or generate them).
 	TrainAndEvaluateNetworkStochastic(network, trainingSet, testSet);
