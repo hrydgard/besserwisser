@@ -79,6 +79,14 @@ void FcLayer::UpdateWeights(float trainingSpeed) {
 	SaxpyAVX(numWeights, -trainingSpeed, deltaWeightSum, weights);
 }
 
+void LossLayer::Initialize() {
+	assert(numData == 1);
+	assert(numInputs >= 1);
+	data = new float[numInputs];
+	numGradients = numInputs;
+	gradient = new float[numGradients] {};
+}
+
 void SVMLossLayer::Forward(const float *input) {
 	assert(label != -1);
 	float sum = 0.0f;
@@ -123,16 +131,39 @@ void SoftMaxLayer::Forward(const float *input) {
 }
 
 void SoftMaxLayer::Backward(const float *prev_data, const float *next_gradient) {
+	for (size_t i = 0; i < numInputs; i++) {
+
+	}
+
 	assert(!next_gradient);
 	// TODO: Implement. Forward should cache the p(k) values, computed in a loop. Could also recompute them from prev_data.
 	// http://cs231n.github.io/neural-networks-case-study/#together
 }
 
-void ReluLayer::Forward(const float *input) {
+void ActivationLayer::Initialize() {
+	assert(numData == numInputs);
+	data = new float[numData];
+	numGradients = numData;
+	gradient = new float[numGradients] {};
+}
+
+void SigmoidLayer::Forward(const float *input) {
 	// TODO: This can be very easily SIMD'd.
 	for (int i = 0; i < numData; i++) {
-		data[i] = std::max(0.0f, input[i]);
+		data[i] = Sigmoid(input[i]);
 	}
+}
+
+void SigmoidLayer::Backward(const float *prev_data, const float *next_gradient) {
+	for (int i = 0; i < numData; i++) {
+		gradient[i] = (1.0f - data[i]) * data[i] * next_gradient[i];
+	}
+}
+
+void ReluLayer::Forward(const float *input) {
+	// for (int i = 0; i < numData; i++)
+	//   data[i] = std::max(0.0f, input[i]);
+	ClampDownToZero(data, input, numData);
 }
 
 void ReluLayer::Backward(const float *prev_data, const float *next_gradient) {

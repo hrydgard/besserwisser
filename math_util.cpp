@@ -2,6 +2,10 @@
 #include "math_util.h"
 #include <immintrin.h>
 
+#define USE_AVX
+#define USE_SSE
+// #define USE_FMA
+
 inline float HorizontalSum(__m128 v) {
 	__m128 shuf = _mm_movehdup_ps(v);        // broadcast elements 3,1 to 2,0
 	__m128 sums = _mm_add_ps(v, shuf);
@@ -18,30 +22,24 @@ inline float HorizontalSum(__m256 v) {
 	return _mm_cvtss_f32(hsum128);
 }
 
-float DotSSE(const float *a, const float *b, size_t size) {
-	float sum;
-	if (size >= 8) {
-		__m128 sumWide1 = _mm_setzero_ps();
-		__m128 sumWide2 = _mm_setzero_ps();
-		while (size >= 8) {
-			sumWide1 = _mm_add_ps(sumWide1, _mm_mul_ps(_mm_loadu_ps(a), _mm_loadu_ps(b)));
-			sumWide2 = _mm_add_ps(sumWide2, _mm_mul_ps(_mm_loadu_ps(a + 4), _mm_loadu_ps(b + 4)));
-			a += 8;
-			b += 8;
-			size -= 8;
-		}
-		sum = HorizontalSum(_mm_add_ps(sumWide1, sumWide2));
-	} else {
-		sum = 0.0f;
+void ClampDownToZero(float *a, const float *b, size_t size) {
+#ifdef USE_AVX
+	__m256 zero = _mm256_setzero_ps();
+	while (size >= 8) {
+		_mm256_store_ps(a, _mm256_max_ps(zero, _mm256_load_ps(b)));
+		a += 8;
+		b += 8;
+		size -= 8;
 	}
-	for (size_t i = 0; i < size; i++) {
-		sum += a[i] * b[i];
+#endif
+	for (int i = 0; i < size; i++) {
+		a[i] = std::max(0.0f, b[i]);
 	}
-	return sum;
 }
 
 float DotAVX(const float *a, const float *b, size_t size) {
-	float sum;
+	float sum = 0.0f;
+#ifdef USE_AVX
 	if (size >= 16) {
 		__m256 sumWide1 = _mm256_setzero_ps();
 		__m256 sumWide2 = _mm256_setzero_ps();
@@ -58,9 +56,24 @@ float DotAVX(const float *a, const float *b, size_t size) {
 			size -= 16;
 		}
 		sum = HorizontalSum(_mm256_add_ps(sumWide1, sumWide2));
+	}
+#elif defined(USE_SSE)
+	if (size >= 8) {
+		__m128 sumWide1 = _mm_setzero_ps();
+		__m128 sumWide2 = _mm_setzero_ps();
+		while (size >= 8) {
+			sumWide1 = _mm_add_ps(sumWide1, _mm_mul_ps(_mm_loadu_ps(a), _mm_loadu_ps(b)));
+			sumWide2 = _mm_add_ps(sumWide2, _mm_mul_ps(_mm_loadu_ps(a + 4), _mm_loadu_ps(b + 4)));
+			a += 8;
+			b += 8;
+			size -= 8;
+		}
+		sum = HorizontalSum(_mm_add_ps(sumWide1, sumWide2));
 	} else {
 		sum = 0.0f;
 	}
+#endif
+
 	for (size_t i = 0; i < size; i++) {
 		sum += a[i] * b[i];
 	}
@@ -76,7 +89,8 @@ float Sum(const float *a, size_t size) {
 }
 
 float SumAVX(const float *a, size_t size) {
-	float sum;
+	float sum = 0.0f;
+#if defined(USE_AVX)
 	if (size >= 16) {
 		__m256 sumWide1 = _mm256_setzero_ps();
 		__m256 sumWide2 = _mm256_setzero_ps();
@@ -87,9 +101,8 @@ float SumAVX(const float *a, size_t size) {
 			size -= 16;
 		}
 		sum = HorizontalSum(_mm256_add_ps(sumWide1, sumWide2));
-	} else {
-		sum = 0.0f;
 	}
+#endif
 	for (size_t i = 0; i < size; i++) {
 		sum += a[i];
 	}
@@ -97,14 +110,15 @@ float SumAVX(const float *a, size_t size) {
 }
 
 float SumSquaresAVX(const float *a, size_t size) {
-	float sum;
+	float sum = 0.0f;
+#if defined(USE_AVX)
 	if (size >= 16) {
 		__m256 sumWide1 = _mm256_setzero_ps();
 		__m256 sumWide2 = _mm256_setzero_ps();
 		while (size >= 16) {
 			__m256 x = _mm256_loadu_ps(a);
 			__m256 y = _mm256_loadu_ps(a + 8);
-#if 1
+#if !defined(USE_FMA)
 			sumWide1 = _mm256_add_ps(sumWide1, _mm256_mul_ps(x, x));
 			sumWide2 = _mm256_add_ps(sumWide2, _mm256_mul_ps(y, y));
 #else
@@ -118,6 +132,7 @@ float SumSquaresAVX(const float *a, size_t size) {
 	} else {
 		sum = 0.0f;
 	}
+#endif
 	for (size_t i = 0; i < size; i++) {
 		float x = a[i];
 		sum += x * x;
@@ -126,6 +141,7 @@ float SumSquaresAVX(const float *a, size_t size) {
 }
 
 void SaxpyAVX(size_t size, float a, const float *x, float *y) {
+#if defined(USE_AVX)
 	__m256 factor = _mm256_set1_ps(a);
 	while (size >= 8) {
 		__m256 sum = _mm256_add_ps(_mm256_mul_ps(factor, _mm256_load_ps(x)), _mm256_load_ps(y));
@@ -134,11 +150,13 @@ void SaxpyAVX(size_t size, float a, const float *x, float *y) {
 		y += 8;
 		size -= 8;
 	}
+#endif
 	for (int i = 0; i < size; i++)
 		y[i] = a*x[i] + y[i];
 }
 
 void AccumulateScaledVectors(float *d, const float *a, float factorA, const float *b, float factorB, size_t size) {
+#if defined(USE_AVX)
 	__m256 factorAwide = _mm256_set1_ps(factorA);
 	__m256 factorBwide = _mm256_set1_ps(factorB);
 	while (size >= 8) {
@@ -152,11 +170,13 @@ void AccumulateScaledVectors(float *d, const float *a, float factorA, const floa
 		d += 8;
 		size -= 8;
 	}
+#endif
 	for (int i = 0; i < size; i++)
 		d[i] += factorA * a[i] + factorB * b[i];
 }
 
 void Accumulate(float *a, const float *b, size_t size) {
+#if defined(USE_AVX)
 	while (size >= 8) {
 		__m256 sum = _mm256_add_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b));
 		_mm256_store_ps(a, sum);
@@ -164,12 +184,14 @@ void Accumulate(float *a, const float *b, size_t size) {
 		b += 8;
 		size -= 8;
 	}
+#endif
 	for (size_t i = 0; i < size; i++) {
 		a[i] += b[i];
 	}
 }
 
 void ScaleInPlace(float *a, float factor, size_t size) {
+#if defined(USE_AVX)
 	__m256 factor8 = _mm256_set_ps(factor, factor, factor, factor, factor, factor, factor, factor);
 	while (size >= 8) {
 		__m256 product = _mm256_mul_ps(_mm256_load_ps(a), factor8);
@@ -177,12 +199,14 @@ void ScaleInPlace(float *a, float factor, size_t size) {
 		a += 8;
 		size -= 8;
 	}
+#endif
 	for (size_t i = 0; i < size; i++) {
 		a[i] *= factor;
 	}
 }
 
 void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size) {
+#if defined(USE_AVX)
 	__m256 factor = _mm256_set1_ps(scale);
 	while (size >= 8) {
 		__m256 bvalue = _mm256_loadu_ps(b);
@@ -192,6 +216,7 @@ void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size)
 		b += 8;
 		size -= 8;
 	}
+#endif
 	for (size_t i = 0; i < size; i++) {
 		a[i] += scale * b[i] * b[i];
 	}

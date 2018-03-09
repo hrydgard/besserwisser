@@ -13,6 +13,7 @@ enum class LayerType {
 	FC,  // Fully connected. Same as a regular linear classifier matrix.
 	RELU,  // Best non-linearity.
 	RELU6,  // Variant of RELU.
+	SIGMOID,  // Old school alternative to RELU, usually worse.
 	SOFTMAX_LOSS,
 	SVM_LOSS,
 
@@ -66,18 +67,32 @@ protected:
 	NeuralNetwork *network_;
 };
 
-// Simple RELU activation. No max.
-class ReluLayer : public Layer {
+
+class ActivationLayer : public Layer {
 public:
-	ReluLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::RELU; }
+	ActivationLayer(NeuralNetwork *network) : Layer(network) {}
+	void Initialize() override;
+};
+
+class SigmoidLayer : public ActivationLayer {
+public:
+	SigmoidLayer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::SIGMOID; }
+	void Forward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
+};
+
+// Simple RELU activation. No max.
+class ReluLayer : public ActivationLayer {
+public:
+	ReluLayer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::RELU; }
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
 // RELU but with a hardcoded max of 6. Available on Android's Neural API.
-class Relu6Layer : public Layer {
+class Relu6Layer : public ActivationLayer {
 public:
-	Relu6Layer(NeuralNetwork *network) : Layer(network) { type = LayerType::RELU; }
+	Relu6Layer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::RELU6; }
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
@@ -129,17 +144,23 @@ public:
 };
 
 // Outputs the loss as a single float.
-class SVMLossLayer : public Layer {
+class LossLayer : public Layer {
 public:
-	SVMLossLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::SVM_LOSS; }
+	LossLayer(NeuralNetwork *network) : Layer(network) {}
+	void Initialize() override;
+};
+
+class SVMLossLayer : public LossLayer {
+public:
+	SVMLossLayer(NeuralNetwork *network) : LossLayer(network) { type = LayerType::SVM_LOSS; }
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
-// Outputs the loss as a single float.
-class SoftMaxLayer : public Layer {
+// What this computes is more correctly known as "Cross entropy loss"
+class SoftMaxLayer : public LossLayer {
 public:
-	SoftMaxLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::SOFTMAX_LOSS; }
+	SoftMaxLayer(NeuralNetwork *network) : LossLayer(network) { type = LayerType::SOFTMAX_LOSS; }
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };

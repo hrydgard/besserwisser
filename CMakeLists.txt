@@ -10,6 +10,8 @@ set(FILES
   mnist.h
   network.cpp
   network.h
+  train.cpp
+  train.h
 )
 
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)

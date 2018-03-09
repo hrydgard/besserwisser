@@ -11,16 +11,7 @@
 
 #include "layer.h"
 #include "network.h"
-
-struct DataSet {
-	std::vector<DataVector> images;
-	std::vector<uint8_t> labels;
-};
-
-struct Subset {
-	DataSet *dataSet;
-	std::vector<int> indices;
-};
+#include "train.h"
 
 struct RunStats {
 	int correct;
@@ -187,10 +178,10 @@ int main() {
 	hiddenLayer.skipBackProp = true;
 	network.layers.push_back(&hiddenLayer);
 
-	ReluLayer relu(&network);
-	relu.numInputs = hiddenLayer.numData;
-	relu.numData = hiddenLayer.numData;
-	network.layers.push_back(&relu);
+	SigmoidLayer activation(&network);
+	activation.numInputs = hiddenLayer.numData;
+	activation.numData = hiddenLayer.numData;
+	network.layers.push_back(&activation);
 
 	FcLayer linearLayer(&network);
 	linearLayer.numInputs = hiddenLayer.numData;
