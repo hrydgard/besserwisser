@@ -35,6 +35,7 @@ float SumAVX(const float *a, size_t size);
 float SumSquaresAVX(const float *a, size_t size);
 void Accumulate(float *a, const float *b, size_t size);
 void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size);
+void AccumulateScaledVector(float *sum, const float *a, float factorA, size_t size);
 void AccumulateScaledVectors(float *sum, const float *a, float factorA, const float *b, float factorB, size_t size);
 void ScaleInPlace(float *a, float factor, size_t size);
 void ClampDownToZero(float *a, const float *b, size_t size);

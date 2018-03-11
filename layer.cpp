@@ -3,18 +3,17 @@
 #include "math_util.h"
 
 void FcLayer::Initialize() {
-	data = new float[numData];
-	numWeights = numData * numInputs;
+	data = new float[dataSize];
+	numWeights = dataSize * inputSize;
 	weights = new float[numWeights]{};
-	numGradients = numInputs;
-	gradient = new float[numGradients]{};  // Here we'll accumulate gradients before we do the adjust.
+	gradient = new float[inputSize]{};  // Input gradients for back propagation.
 	GaussianNoise(weights, numWeights, network_->hyperParams.weightInitScale);
 }
 
 void FcLayer::Forward(const float *input) {
 	// Just a matrix*vector multiplication.
-	for (int y = 0; y < numData; y++) {
-		data[y] = DotAVX(input, &weights[y * numInputs], numInputs);
+	for (int y = 0; y < dataSize; y++) {
+		data[y] = DotAVX(input, &weights[y * inputSize], inputSize);
 	}
 }
 
@@ -22,8 +21,8 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 	float regStrength = network_->hyperParams.regStrength;
 
 	// Partial derivative dL/dx.
-	for (int y = 0; y < numData; y++) {
-		int offset = y * numInputs;
+	for (int y = 0; y < dataSize; y++) {
+		int offset = y * inputSize;
 
 		// The derivative of a multiplication with respect to a variable is the other variable.
 		// Then do the chain rule multiplication. Remember to add on the partial derivative
@@ -33,7 +32,7 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 
 		//for (int x = 0; x < numInputs; x++)
 		//	deltaWeightSum[offset + x] += prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
-		AccumulateScaledVectors(deltaWeightSum + offset, prev_data, next_gradient[y], weights + offset, regStrength, numInputs);
+		AccumulateScaledVectors(deltaWeightSum + offset, prev_data, next_gradient[y], weights + offset, regStrength, inputSize);
 	}
 
 	if (skipBackProp)
@@ -41,13 +40,13 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 
 	// We also need to back propagate the gradient through.
 	// NOTE: We should be able to skip this if the previous layer is an image (or first!)!
-	for (int x = 0; x < numInputs; x++) {
-		float sum = 0.0f;
-		for (int y = 0; y < numData; y++) {
-			float w = weights[y * numInputs + x];
-			sum += w * next_gradient[y];
-		}
-		gradient[x] = sum;
+	for (int x = 0; x < inputSize; x++) {
+		gradient[x] = 0.0f;
+	}
+	for (int y = 0; y < dataSize; y++) {
+		// for (int x = 0; x < numInputs; x++)
+		//   gradient[x] += weights[y * numInputs + x] * next_gradient[y];
+		AccumulateScaledVector(gradient, weights + y * inputSize, next_gradient[y], inputSize);
 	}
 }
 
@@ -88,15 +87,14 @@ void ConvLayer::Initialize() {
 
 	// numData is the size of the input image (or previous layers).
 	// color images are passed in with 3 channels.
-	assert(numInputs == inputDim.width * inputDim.height * inputDim.depth);
-	data = new float[numData];
+	assert(inputSize == inputDim.width * inputDim.height * inputDim.depth);
+	data = new float[dataSize];
 
-	numWeights = numData * numInputs;
+	numWeights = dataSize * inputSize;
 	weights = new float[numWeights] {};
 	bias = 1.0f;  // ?
 
-	numGradients = numInputs;
-	gradient = new float[numGradients] {};  // Here we'll accumulate gradients before we do the adjust.
+	gradient = new float[inputSize] {};  // Here we'll accumulate gradients before we do the adjust.
 
 	// TODO: Do circular weighting in the initialization to try to
 	// encourage nice Gabor-like filters.
@@ -194,17 +192,16 @@ void ConvLayer::UpdateWeights(float trainingSpeed) {
 }
 
 void LossLayer::Initialize() {
-	assert(numData == 1);
-	assert(numInputs >= 1);
-	data = new float[numInputs];
-	numGradients = numInputs;
-	gradient = new float[numGradients] {};
+	assert(dataSize == 1);
+	assert(inputSize >= 1);
+	data = new float[inputSize];
+	gradient = new float[inputSize] {};
 }
 
 void SVMLossLayer::Forward(const float *input) {
 	assert(label != -1);
 	float sum = 0.0f;
-	for (size_t i = 0; i < numInputs; i++) {
+	for (size_t i = 0; i < inputSize; i++) {
 		if (i != label) {
 			sum += std::max(0.0f, input[i] - input[label] + 1.0f);
 		}
@@ -222,12 +219,12 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 	// The "correct" level is involved in all the rows so it needs a summing loop,
 	// while the others can be computed directly.
 	int positive_count = 0;
-	for (size_t i = 0; i < numInputs; i++) {
+	for (size_t i = 0; i < inputSize; i++) {
 		if (i != label)
 			positive_count += (prev_data[i] - prev_data[label] + 1.0f) > 0.0f;
 	}
 
-	for (size_t i = 0; i < numInputs; i++) {
+	for (size_t i = 0; i < inputSize; i++) {
 		if (i == label) {
 			gradient[i] = -(float)positive_count;
 		} else {
@@ -238,7 +235,7 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 
 void SoftMaxLossLayer::Forward(const float *input) {
 	float expSum = 0.0f;
-	for (size_t i = 0; i < numInputs; i++) {
+	for (size_t i = 0; i < inputSize; i++) {
 		expSum += expf(input[i]);
 	}
 	data[0] = -logf(expf(input[label]) / expSum);
@@ -251,30 +248,29 @@ void SoftMaxLossLayer::Backward(const float *prev_data, const float *next_gradie
 	// http://cs231n.github.io/neural-networks-case-study/#together
 	// For simplicity, partially recompute the forward pass. This code isn't the bottleneck.
 	float expSum = 0.0f;
-	for (size_t i = 0; i < numInputs; i++) {
+	for (size_t i = 0; i < inputSize; i++) {
 		expSum += expf(prev_data[i]);
 	}
-	for (size_t i = 0; i < numInputs; i++) {
+	for (size_t i = 0; i < inputSize; i++) {
 		gradient[i] = expf(prev_data[i])/expSum - (label == i ? 1.0f : 0.0f);
 	}
 }
 
 void ActivationLayer::Initialize() {
-	assert(numData == numInputs);
-	data = new float[numData];
-	numGradients = numData;
-	gradient = new float[numGradients] {};
+	assert(dataSize == inputSize);
+	data = new float[dataSize];
+	gradient = new float[inputSize] {};
 }
 
 void SigmoidLayer::Forward(const float *input) {
 	// TODO: This can be very easily SIMD'd.
-	for (int i = 0; i < numData; i++) {
+	for (int i = 0; i < dataSize; i++) {
 		data[i] = Sigmoid(input[i]);
 	}
 }
 
 void SigmoidLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (int i = 0; i < numData; i++) {
+	for (int i = 0; i < dataSize; i++) {
 		gradient[i] = (1.0f - data[i]) * data[i] * next_gradient[i];
 	}
 }
@@ -282,35 +278,35 @@ void SigmoidLayer::Backward(const float *prev_data, const float *next_gradient) 
 void ReluLayer::Forward(const float *input) {
 	// for (int i = 0; i < numData; i++)
 	//   data[i] = std::max(0.0f, input[i]);
-	ClampDownToZero(data, input, numData);
+	ClampDownToZero(data, input, dataSize);
 }
 
 void ReluLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (int i = 0; i < numData; i++) {
+	for (int i = 0; i < dataSize; i++) {
 		gradient[i] = prev_data[i] > 0.0f ? next_gradient[i] : 0.0f;
 	}
 }
 
 void LeakyReluLayer::Forward(const float *input) {
-	for (int i = 0; i < numData; i++)
+	for (int i = 0; i < dataSize; i++)
 		data[i] = std::max(coef * input[i], input[i]);
 }
 
 void LeakyReluLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (int i = 0; i < numData; i++) {
+	for (int i = 0; i < dataSize; i++) {
 		gradient[i] = prev_data[i] > 0.0f ? next_gradient[i] : next_gradient[i] * coef;
 	}
 }
 
 void Relu6Layer::Forward(const float *input) {
 	// TODO: This can be very easily SIMD'd.
-	for (int i = 0; i < numData; i++) {
+	for (int i = 0; i < dataSize; i++) {
 		data[i] = std::max(0.0f, std::min(input[i], 6.0f));
 	}
 }
 
 void Relu6Layer::Backward(const float *prev_data, const float *input) {
-	for (int i = 0; i < numData; i++) {
+	for (int i = 0; i < dataSize; i++) {
 		gradient[i] = data[i] > 6.0f ? 0.0f : (data[i] > 0.0f ? input[i] : 0.0f);
 	}
 }

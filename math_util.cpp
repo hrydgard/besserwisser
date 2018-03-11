@@ -155,6 +155,22 @@ void SaxpyAVX(size_t size, float a, const float *x, float *y) {
 		y[i] = a*x[i] + y[i];
 }
 
+void AccumulateScaledVector(float *d, const float *a, float factorA, size_t size) {
+#if defined(USE_AVX)
+	__m256 factorAwide = _mm256_set1_ps(factorA);
+	while (size >= 8) {
+		__m256 prev = _mm256_load_ps(d);
+		__m256 sum = _mm256_mul_ps(factorAwide, _mm256_load_ps(a));
+		_mm256_store_ps(d, _mm256_add_ps(prev, sum));
+		a += 8;
+		d += 8;
+		size -= 8;
+	}
+#endif
+	for (int i = 0; i < size; i++)
+		d[i] += factorA * a[i];
+}
+
 void AccumulateScaledVectors(float *d, const float *a, float factorA, const float *b, float factorB, size_t size) {
 #if defined(USE_AVX)
 	__m256 factorAwide = _mm256_set1_ps(factorA);

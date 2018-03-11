@@ -1,13 +1,14 @@
 #pragma once
 
 struct Dim {
+	int count = 1;
 	int depth, height, width;
 
 	int TotalSize() const {
-		return depth * height * width;
+		return count * depth * height * width;
 	}
-	int GetIndex(int x, int y, int z) const {
-		return (width * height * z) + (width * y) + x;
+	int GetIndex(int x, int y, int z, int n = 0) const {
+		return n * (depth * width * height) + (width * height * z) + (width * y) + x;
 	}
 };
 

@@ -38,11 +38,6 @@ public:
 	virtual void Forward(const float *input) = 0;   // input = The neurons from the previous layer
 	virtual void Backward(const float *prev_data, const float *next_gradient) = 0;  // input = The gradients from the next layer
 
-	void ClearGradients() {
-		if (gradient) {
-			memset(gradient, 0, sizeof(gradient[0]) * numGradients);
-		}
-	}
 	virtual void ClearDeltaWeightSum() {}
 	virtual void ScaleDeltaWeightSum(float factor) {}
 	virtual float GetRegularizationLoss() { return 0.0f; }
@@ -51,9 +46,8 @@ public:
 	LayerType type;
 	std::string name;  // optional
 
-	int numInputs = 0;
-	int numData = 0;
-	int numGradients = 0;
+	int inputSize = 0;
+	int dataSize = 0;
 
 	// State (image content, neurons, whatever). All nodes have this.
 	float *data = nullptr;  // Vector.

@@ -43,7 +43,7 @@ float ComputeLossOverMinibatch(NeuralNetwork &network, const MiniBatch &subset, 
 		int index = subset.indices[i];
 		float loss = ComputeDataLoss(network, *subset.dataSet, index, stats);
 		if (stats) {
-			int label = FindMaxIndex(scoreLayer->data, scoreLayer->numData);
+			int label = FindMaxIndex(scoreLayer->data, scoreLayer->dataSize);
 			assert(label >= 0);
 			if (label == subset.dataSet->labels[index]) {
 				stats->correct++;
@@ -96,11 +96,10 @@ static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &sub
 		network.RunForwardPass();
 		network.RunBackwardPass();  // Accumulates delta weights
 	}
-	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
 
 	// Update all training weights.
 	for (auto *layer : network.layers) {
-		layer->UpdateWeights(speed);
+		layer->UpdateWeights(speed / subset.indices.size());
 	}
 }
 

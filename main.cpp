@@ -63,20 +63,20 @@ int RunMnist(int argc, const char *argv[]) {
 	network.hyperParams.weightInitScale = 0.05f;
 
 	ImageLayer imageLayer(&network);
-	imageLayer.numInputs = 0;
-	imageLayer.numData = 28 * 28 + 1;  // + 1 for bias trick
+	imageLayer.inputSize = 0;
+	imageLayer.dataSize = 28 * 28 + 1;  // + 1 for bias trick
 	network.layers.push_back(&imageLayer);
 
 #if 1  // 2-layer network
 	FcLayer hiddenLayer(&network);
-	hiddenLayer.numInputs = 28 * 28 + 1;
-	hiddenLayer.numData = 100;
+	hiddenLayer.inputSize = 28 * 28 + 1;
+	hiddenLayer.dataSize = 100;
 	hiddenLayer.skipBackProp = true;
 	network.layers.push_back(&hiddenLayer);
 
-	LeakyReluLayer activation(&network);
-	activation.numInputs = hiddenLayer.numData;
-	activation.numData = hiddenLayer.numData;
+	ReluLayer activation(&network);
+	activation.inputSize = hiddenLayer.dataSize;
+	activation.dataSize = hiddenLayer.dataSize;
 	network.layers.push_back(&activation);
 
 #if 0  // Extend to 3 layers. Does not seem to improve perf.
@@ -92,23 +92,23 @@ int RunMnist(int argc, const char *argv[]) {
 #endif
 
 	FcLayer linearLayer(&network);
-	linearLayer.numInputs = hiddenLayer.numData;
-	linearLayer.numData = 10;
+	linearLayer.inputSize = hiddenLayer.dataSize;
+	linearLayer.dataSize = 10;
 	network.layers.push_back(&linearLayer);
 
 	FcLayer *testLayer = (FcLayer *)&hiddenLayer;
 #else
 	FcLayer linearLayer(&network);
-	linearLayer.numInputs = 28 * 28 + 1;
-	linearLayer.numData = 10;
+	linearLayer.inputSize = 28 * 28 + 1;
+	linearLayer.dataSize = 10;
 	network.layers.push_back(&linearLayer);
 
 	FcLayer *testLayer = (FcLayer *)&linearLayer;
 #endif
 
 	SVMLossLayer lossLayer(&network);
-	lossLayer.numInputs = 10;
-	lossLayer.numData = 1;
+	lossLayer.inputSize = 10;
+	lossLayer.dataSize = 1;
 	network.layers.push_back(&lossLayer);
 
 	network.InitializeNetwork();
