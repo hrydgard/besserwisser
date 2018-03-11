@@ -96,15 +96,6 @@ struct Tensor {
 	}
 };
 
-struct DataVector {
-	~DataVector() {
-		delete[] data;
-	}
-	float *data = nullptr;
-	size_t size = 0;
-	ivec3 dim{};  // Dimensions the data should be interpreted at. Will tag along on the ride.
-};
-
 std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, size_t setSize);
 std::vector<int> GetFullSet(size_t count);
 

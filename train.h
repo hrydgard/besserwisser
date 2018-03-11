@@ -8,7 +8,7 @@
 #include "network.h"
 
 struct DataSet {
-	std::vector<DataVector> images;
+	std::vector<Blob> images;
 	std::vector<uint8_t> labels;
 };
 

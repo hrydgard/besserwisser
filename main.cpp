@@ -1,9 +1,11 @@
 ﻿// Neural net code by Henrik Rydgård
 
 // A collection of useful links to understand this stuff:
+
 // CS231n (free Stanford course material): http://cs231n.github.io/
 // Debugging help: https://blog.slavv.com/37-reasons-why-your-neural-network-is-not-working-4020854bd607
-// 3blue1brown videos: 
+// 3blue1brown videos: https://www.youtube.com/watch?v=aircAruvnKk&list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi
+// Why RELU: http://proceedings.mlr.press/v15/glorot11a/glorot11a.pdf
 
 #include <cmath>
 #include <cstdint>

@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "math_util.h"
+#include "blob.h"
 
 enum class LayerType {
 	// These should be enough to get good results.
@@ -20,17 +21,6 @@ enum class LayerType {
 	// Future
 	CONV,
 	MAXPOOL,  // Downsamples by 2x in X and Y but not Z.
-};
-
-struct Dim {
-	int depth, height, width;
-
-	int TotalSize() const {
-		return depth * height * width;
-	}
-	int GetIndex(int x, int y, int z) const {
-		return (width * height * z) + (width * y) + x;
-	}
 };
 
 class NeuralNetwork;
@@ -59,20 +49,17 @@ public:
 	virtual void UpdateWeights(float trainingSpeed) {}
 
 	LayerType type;
+	std::string name;  // optional
 
 	int numInputs = 0;
 	int numData = 0;
 	int numGradients = 0;
 
-	// State. There's way too much state! Possibly should be separated out so the rest
-	// can be shared between threads or something.
+	// State (image content, neurons, whatever). All nodes have this.
 	float *data = nullptr;  // Vector.
 
-	// Gradient to backpropagate to the next step.
+	// Gradient to backpropagate to the previous step.
 	float *gradient = nullptr;
-
-	// Truth. Used by softmaxloss and svmloss layers.
-	int label = -1;
 
 protected:
 	NeuralNetwork *network_;
@@ -126,6 +113,9 @@ public:
 class ImageLayer : public InputLayer {
 public:
 	ImageLayer(NeuralNetwork *network) : InputLayer(network) { type = LayerType::IMAGE; }
+
+	// Loads the next example image from the dataset.
+	void Forward(const float *input) override {}
 };
 
 // Fully connected neural layer.
@@ -204,6 +194,9 @@ class LossLayer : public Layer {
 public:
 	LossLayer(NeuralNetwork *network) : Layer(network) {}
 	void Initialize() override;
+
+	// Truth. Used by softmaxloss and svmloss layers.
+	int label = -1;
 };
 
 class SVMLossLayer : public LossLayer {
