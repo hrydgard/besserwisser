@@ -14,8 +14,24 @@ struct DataSet {
 
 // Defines a subset of a dataset.
 struct MiniBatch {
+	~MiniBatch() {
+		delete[] blobs;
+		delete[] labels;
+	}
 	const DataSet *dataSet;
 	std::vector<int> indices;
+
+	void Extract() {
+		blobs = new const Blob*[indices.size()];
+		labels = new int[indices.size()];
+		for (size_t i = 0; i < indices.size(); i++) {
+			blobs[i] = &dataSet->images[indices[i]];
+			labels[i] = dataSet->labels[indices[i]];
+		}
+	}
+
+	const Blob **blobs = nullptr;
+	int *labels = nullptr;
 };
 
 struct RunStats {
@@ -34,4 +50,4 @@ float ComputeLossOverMinibatch(NeuralNetwork &network, const MiniBatch &subset, 
 bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet &dataSet);
 
 // This is the normal way to train a classifier network in minibatches.
-void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs = 100);
+void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs = 100, int miniBatchSize = 32);
