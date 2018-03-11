@@ -128,19 +128,20 @@ static void TrainLayerBruteForce(NeuralNetwork &network, const MiniBatch &subset
 bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet &dataSet) {
 	MiniBatch subset;
 	subset.dataSet = &dataSet;
-	subset.indices = { 1, 2 };
+	subset.indices = { 1 };
 	subset.Extract();
 	// Run the network first forward then backwards, then compute the brute force gradient and compare.
 	printf("Fast gradient (b)...\n");
 	network.ClearDeltaWeightSum();
-	for (size_t i = 0; i < subset.indices.size(); i++) {
+	//for (size_t i = 0; i < subset.indices.size(); i++) {
+	int i = 0;
 		((ImageLayer *)network.layers[0])->blobs = subset.blobs + i;
 		LossLayer *finalLayer = (LossLayer *)network.layers.back();
 		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
 		finalLayer->labels = subset.labels + i;
-		network.RunForwardPass(1);
-		network.RunBackwardPass(1);  // Accumulates delta weights.
-	}
+		network.RunForwardPass(subset.indices.size());
+		network.RunBackwardPass(subset.indices.size());  // Accumulates delta weights.
+	//}
 	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
 
 	std::unique_ptr<float[]> deltaWeightSum(new float[testLayer->numWeights]{});

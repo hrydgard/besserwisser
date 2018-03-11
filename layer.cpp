@@ -9,7 +9,7 @@ void ImageLayer::Initialize() {
 void ImageLayer::Forward(int miniBatchSize, const float *input) {
 	for (int n = 0; n < miniBatchSize; n++) {
 		assert(blobs[n]->size == dataSize);
-		blobs[n]->CopyToFloat(data);
+		blobs[n]->CopyToFloat(data + n * dataSize);
 	}
 }
 
@@ -49,7 +49,11 @@ void FcLayer::Backward(int miniBatchSize, const float *prev_data, const float *n
 
 			//for (int x = 0; x < numInputs; x++)
 			//	deltaWeightSum[offset + x] += prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
-			AccumulateScaledVectors(deltaWeightSum + offset, prev_data + n * inputSize, next_gradient[y] + n * dataSize, weights + offset, regStrength, inputSize);
+			AccumulateScaledVectors(
+				deltaWeightSum + offset,
+				prev_data + n * inputSize,
+				next_gradient[y + n * dataSize],
+				weights + offset, regStrength, inputSize);
 		}
 	}
 
@@ -60,12 +64,16 @@ void FcLayer::Backward(int miniBatchSize, const float *prev_data, const float *n
 		gradient[x] = 0.0f;
 	}
 	for (int n = 0; n < miniBatchSize; n++) {
-		// We also need to back propagate the gradient through.
+		// We also need to back propagate the gradients through.
 		// NOTE: We should be able to skip this if the previous layer is an image (or first!)!
 		for (int y = 0; y < dataSize; y++) {
 			// for (int x = 0; x < numInputs; x++)
 			//   gradient[x] += weights[y * numInputs + x] * next_gradient[y];
-			AccumulateScaledVector(gradient + n * inputSize, weights + y * inputSize, next_gradient[y] + n * inputSize, inputSize);
+			AccumulateScaledVector(
+				gradient + n * inputSize,
+				weights + y * inputSize,
+				next_gradient[y + n * dataSize],
+				inputSize);
 		}
 	}
 }
@@ -236,7 +244,7 @@ void SVMLossLayer::Forward(int miniBatchSize, const float *input) {
 		float sum = 0.0f;
 		for (size_t i = 0; i < inputSize; i++) {
 			if (i != labels[n]) {
-				sum += std::max(0.0f, input[n * inputSize + i] - input[labels[n]] + 1.0f);
+				sum += std::max(0.0f, input[n * inputSize + i] - input[n * inputSize + labels[n]] + 1.0f);
 			}
 		}
 		data[n] = sum;
