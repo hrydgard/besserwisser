@@ -3,7 +3,7 @@
 #include "math_util.h"
 
 void ImageLayer::Initialize() {
-	data = new float[dataSize * count];
+	data = new float[dataSize * count]{};
 }
 
 void ImageLayer::Forward(int miniBatchSize, const float *input) {
@@ -27,7 +27,7 @@ void FcLayer::Forward(int miniBatchSize, const float *input) {
 	for (int n = 0; n < miniBatchSize; n++) {
 		// Just a matrix*vector multiplication.
 		for (int y = 0; y < dataSize; y++) {
-			data[n * dataSize + y] = DotAVX(input, &weights[y * inputSize], inputSize);
+			data[n * dataSize + y] = DotAVX(input + n * inputSize, &weights[y * inputSize], inputSize);
 		}
 	}
 }
@@ -47,7 +47,7 @@ void FcLayer::Backward(int miniBatchSize, const float *prev_data, const float *n
 			// Also note that we regularize the biases if they've been baked into weights, we don't care.
 			// The literature says that it really doesn't seem to matter but is unclear on why.
 
-			//for (int x = 0; x < numInputs; x++)
+			//for (int x = 0; x < inputSize; x++)
 			//	deltaWeightSum[offset + x] += prev_data[x] * next_gradient[y] + weights[offset + x] * regStrength;
 			AccumulateScaledVectors(
 				deltaWeightSum + offset,
@@ -68,7 +68,7 @@ void FcLayer::Backward(int miniBatchSize, const float *prev_data, const float *n
 		// NOTE: We should be able to skip this if the previous layer is an image (or first!)!
 		for (int y = 0; y < dataSize; y++) {
 			// for (int x = 0; x < numInputs; x++)
-			//   gradient[x] += weights[y * numInputs + x] * next_gradient[y];
+			//   gradient[x] += weights[y * inputSize + x] * next_gradient[y];
 			AccumulateScaledVector(
 				gradient + n * inputSize,
 				weights + y * inputSize,
@@ -325,11 +325,10 @@ void SigmoidLayer::Backward(int miniBatchSize, const float *prev_data, const flo
 }
 
 void ReluLayer::Forward(int miniBatchSize, const float *input) {
-	for (int n = 0; n < miniBatchSize; n++) {
-		// for (int i = 0; i < numData; i++)
-		//   data[i] = std::max(0.0f, input[i]);
-		ClampDownToZero(data + n * dataSize, input + n * inputSize, dataSize);
-	}
+	assert(dataSize == inputSize);
+	// for (int i = 0; i < dataSize * miniBatchSize; i++)
+	//   data[i] = std::max(0.0f, input[i]);
+	ClampDownToZero(data, input, dataSize * miniBatchSize);
 }
 
 void ReluLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {

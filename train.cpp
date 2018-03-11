@@ -64,7 +64,7 @@ float ComputeLossOverMinibatch(NeuralNetwork &network, const MiniBatch &subset, 
 
 // Utility used for validation of the real training code. Will simply do a brute force gradient calculation
 // by disturbing and resetting every training weight of the chosen layer (finite difference method).
-static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer *layer, float *gradient) {
+static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBatch &subset, Layer *layer, float *deltaWeightSum) {
 	assert(layer->type == LayerType::FC);
 	FcLayer *fcLayer = dynamic_cast<FcLayer *>(layer);
 
@@ -81,10 +81,10 @@ static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBa
 		float down = ComputeLossOverMinibatch(network, subset);
 		// Restore and compute gradient.
 		fcLayer->weights[i] = origWeight;
-		gradient[i] = (up - down) * inv2Diff;
+		deltaWeightSum[i] = (up - down) * inv2Diff;
 	}
 	PrintFloatVector("Weights", fcLayer->weights, size, 10);
-	PrintFloatVector("Gradient", gradient, size, 10);
+	PrintFloatVector("DeltaWeights", deltaWeightSum, size, 10);
 }
 
 // Trains all the weights in a network by running both a forward and a backward pass for every item
@@ -93,14 +93,12 @@ static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &sub
 	assert(miniBatchSize <= network.hyperParams.maxMiniBatchSize);
 	network.ClearDeltaWeightSum();
 
-	for (int i = 0; i < subset.indices.size(); i++) {
-		((ImageLayer *)network.layers[0])->blobs = subset.blobs + i;
-		LossLayer *finalLayer = (LossLayer *)network.layers.back();
-		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
-		finalLayer->labels = subset.labels + i;
-		network.RunForwardPass(1);
-		network.RunBackwardPass(1);  // Accumulates delta weights
-	}
+	((ImageLayer *)network.layers[0])->blobs = subset.blobs;
+	LossLayer *finalLayer = (LossLayer *)network.layers.back();
+	assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
+	finalLayer->labels = subset.labels;
+	network.RunForwardPass(miniBatchSize);
+	network.RunBackwardPass(miniBatchSize);  // Accumulates delta weights
 
 	// Update all training weights.
 	for (auto *layer : network.layers) {
@@ -128,28 +126,28 @@ static void TrainLayerBruteForce(NeuralNetwork &network, const MiniBatch &subset
 bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet &dataSet) {
 	MiniBatch subset;
 	subset.dataSet = &dataSet;
-	subset.indices = { 1 };
+	subset.indices = { 1, 2 };
 	subset.Extract();
 	// Run the network first forward then backwards, then compute the brute force gradient and compare.
-	printf("Fast gradient (b)...\n");
+	printf("Fast delta weights (b)...\n");
+
 	network.ClearDeltaWeightSum();
-	//for (size_t i = 0; i < subset.indices.size(); i++) {
 	int i = 0;
-		((ImageLayer *)network.layers[0])->blobs = subset.blobs + i;
-		LossLayer *finalLayer = (LossLayer *)network.layers.back();
-		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
-		finalLayer->labels = subset.labels + i;
-		network.RunForwardPass(subset.indices.size());
-		network.RunBackwardPass(subset.indices.size());  // Accumulates delta weights.
-	//}
+	((ImageLayer *)network.layers[0])->blobs = subset.blobs + i;
+	LossLayer *finalLayer = (LossLayer *)network.layers.back();
+	assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
+	finalLayer->labels = subset.labels + i;
+	network.RunForwardPass(subset.indices.size());
+	network.RunBackwardPass(subset.indices.size());  // Accumulates delta weights.
+
 	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
 
 	std::unique_ptr<float[]> deltaWeightSum(new float[testLayer->numWeights]{});
-	printf("Computing test gradient over %d examples by brute force (a)...\n", (int)subset.indices.size());
+	printf("Computing test delta weight over %d examples by brute force (a)...\n", (int)subset.indices.size());
 	ComputeDeltaWeightSumBruteForce(network, subset, testLayer, deltaWeightSum.get());
 	int diffCount = DiffVectors(deltaWeightSum.get(), testLayer->deltaWeightSum, testLayer->numWeights, 0.01f, 200);
 	printf("Done with test.\n");
-	if (diffCount > 1000) {
+	if (diffCount > 200) {
 		return false;
 	}
 	return true;  // probably ok.

@@ -97,6 +97,7 @@ int RunMnist(int argc, const char *argv[]) {
 	network.layers.push_back(&linearLayer);
 
 	FcLayer *testLayer = (FcLayer *)&hiddenLayer;
+	// FcLayer *testLayer = (FcLayer *)&linearLayer;
 #else
 	FcLayer linearLayer(&network);
 	linearLayer.inputSize = 28 * 28 + 1;
