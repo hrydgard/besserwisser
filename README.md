@@ -8,20 +8,19 @@ For production use, you're probably better of with something like Caffe or Keras
 Features working:
 
   * Load MNIST data set
-	* Mini-batch training
-	* Multi-layer (fully connected) neural networks
-	* RELU and Sigmoid activation functions (RELU recommended)
-	* SVM loss function
-	* Inference
-	* AVX acceleration of nearly all functionality
+  * Mini-batch training
+  * Multi-layer (fully connected) neural networks
+  * RELU and Sigmoid activation functions (RELU recommended)
+  * AVX acceleration of nearly all functionality
+  * SVM and Softmax loss functions
+  * Inference
 
 Future plans:
 
-	* Vectorize mini-batch training properly
-	* API and a workable command line/config file user interface
+  * Convolutional nets
+  * API and a workable command line/config file user interface
   * GPU training and inference using Vulkan
-	* Multi-threaded CPU training
-	* Convolutional nets
+  * Multi-threaded CPU training
 
 To run the example, first run get-mnist.sh to get the MNIST dataset (or download it manually). If you're on Windows, get-mnist.sh will run under WSL. Also make sure to run ```git submodule update --init --recursive``` before building.
 
@@ -34,4 +33,4 @@ To build and run on Windows:
 To build on other platforms:
 
   * ```cmake .```
-	* make
+  * make
