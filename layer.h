@@ -49,6 +49,8 @@ public:
 	int inputSize = 0;
 	int dataSize = 0;
 
+	int count = 1;  // Batch size. Allows for better vectorization when we move to GPU.
+
 	// State (image content, neurons, whatever). All nodes have this.
 	float *data = nullptr;  // Vector.
 
@@ -187,10 +189,12 @@ public:
 class LossLayer : public Layer {
 public:
 	LossLayer(NeuralNetwork *network) : Layer(network) {}
+	~LossLayer() {}
+
 	void Initialize() override;
 
 	// Truth. Used by softmaxloss and svmloss layers.
-	int label = -1;
+	int *labels = nullptr;
 };
 
 class SVMLossLayer : public LossLayer {
