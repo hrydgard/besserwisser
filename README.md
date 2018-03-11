@@ -1,9 +1,9 @@
-SimpleNet
-=========
+BesserWisser
+============
 
-A very simple implementation of neural networks. Made this in order to understand them better.
+A simple implementation of deep neural networks. Made this in order to understand them better.
 
-For production use, you're currently probably better of with something like Caffe or Keras.
+For production use, you're probably better of with something like Caffe or Keras.
 
 Features working:
 
@@ -18,13 +18,12 @@ Features working:
 Future plans:
 
 	* Vectorize mini-batch training properly
-	* Nicer API and command line user interface
+	* API and a workable command line/config file user interface
   * GPU training and inference using Vulkan
 	* Multi-threaded CPU training
 	* Convolutional nets
 
 To run the example, first run get-mnist.sh to get the MNIST dataset (or download it manually). If you're on Windows, get-mnist.sh will run under WSL. Also make sure to run ```git submodule update --init --recursive``` before building.
-
 
 To build and run on Windows:
 

@@ -3,6 +3,7 @@
 // A collection of useful links to understand this stuff:
 // CS231n (free Stanford course material): http://cs231n.github.io/
 // Debugging help: https://blog.slavv.com/37-reasons-why-your-neural-network-is-not-working-4020854bd607
+// 3blue1brown videos: 
 
 #include <cmath>
 #include <cstdint>
@@ -20,16 +21,22 @@
 #include "network.h"
 #include "train.h"
 
+int RunConvTest(int argc, const char *argv[]) {
+	// TODO
+
+	return 0;
+}
+
 // simple architectures:
 // (note: No RELU before the loss function)
-// INPUT -> FC -> RELU -> FC -> RELU -> FC -> LOSS
-// INPUT -> FC -> RELU -> FC -> LOSS
-// INPUT -> FC -> LOSS
-
-int main(int argc, const char *argv[]) {
+// INPUT -> FC -> LOSS  (89% on MNIST)
+// INPUT -> FC -> RELU -> FC -> LOSS (98% on MNIST)
+int RunMnist(int argc, const char *argv[]) {
 	std::string mnist_root = "";
 	if (argc > 1)
 		mnist_root = std::string(argv[1]);
+	if (mnist_root.empty())
+		mnist_root = "C:/dev/MNIST";
 
 	// http://yann.lecun.com/exdb/mnist/
 	// The expected error rate for a pure linear classifier is 12% and we achieve that
@@ -65,7 +72,7 @@ int main(int argc, const char *argv[]) {
 	hiddenLayer.skipBackProp = true;
 	network.layers.push_back(&hiddenLayer);
 
-	ReluLayer activation(&network);
+	LeakyReluLayer activation(&network);
 	activation.numInputs = hiddenLayer.numData;
 	activation.numData = hiddenLayer.numData;
 	network.layers.push_back(&activation);
@@ -104,7 +111,7 @@ int main(int argc, const char *argv[]) {
 
 	network.InitializeNetwork();
 
-#if 0
+#if 1
 	if (!RunBruteForceTest(network, testLayer, trainingSet)) {
 		network.layers[0]->data = nullptr;  // Don't want to autodelete this..
 		while (true);  // wait for Ctrl+C.
@@ -114,9 +121,13 @@ int main(int argc, const char *argv[]) {
 
 	// TODO: Add support for separated dev and test sets if available (or generate them).
 	TrainAndEvaluateNetworkStochastic(network, trainingSet, testSet);
+	return 0;
+}
 
-	printf("Done.\n");
-	
+int main(int argc, const char *argv[]) {
+	printf("BesserWisser - a neural network implementation by Henrik Rydgård\n");
+	RunMnist(argc, argv);
 	while (true);  // wait for Ctrl+C.
+	printf("Done.\n");
 	return 0;
 }

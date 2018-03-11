@@ -22,6 +22,17 @@ enum class LayerType {
 	MAXPOOL,  // Downsamples by 2x in X and Y but not Z.
 };
 
+struct Dim {
+	int depth, height, width;
+
+	int TotalSize() const {
+		return depth * height * width;
+	}
+	int GetIndex(int x, int y, int z) const {
+		return (width * height * z) + (width * y) + x;
+	}
+};
+
 class NeuralNetwork;
 
 class Layer {
@@ -89,6 +100,14 @@ public:
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
+class LeakyReluLayer : public ActivationLayer {
+public:
+	LeakyReluLayer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::RELU; }
+	void Forward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
+	float coef = 0.01f;
+};
+
 // RELU but with a hardcoded max of 6. Available on Android's Neural API.
 class Relu6Layer : public ActivationLayer {
 public:
@@ -140,6 +159,43 @@ public:
 	// Used in batch training only to keep intermediate data.
 	float *deltaWeightSum = nullptr;
 
+	// The first layer after an image doesn't need to backprop - use this.
+	bool skipBackProp = false;
+};
+
+// Convolutional neural layer.
+class ConvLayer : public Layer {
+public:
+	ConvLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::CONV; }
+	~ConvLayer() {
+		delete[] weights;
+		delete[] deltaWeightSum;
+	}
+
+	void Initialize() override;
+	void Forward(const float *input) override;
+	void Backward(const float *prev_data, const float *next_gradient) override;
+
+	// TODO: Share these with FcLayer (common base class TrainableLayer?)
+	void ClearDeltaWeightSum() override;
+	void ScaleDeltaWeightSum(float factor) override;
+	float GetRegularizationLoss() override;
+	void UpdateWeights(float trainingSpeed) override;
+
+	Dim inputDim;
+	Dim kernelDim;
+	Dim outputDim;
+	int padding = 0;
+
+	// Filter
+	float *weights;
+	int numWeights;  // kernelSize*kernelSize*(inputDim.depth * outputDim.depth) ??
+	float bias;
+
+	// Used in batch training only to keep intermediate data.
+	float *deltaWeightSum = nullptr;
+
+	// The first layer after an image doesn't need to backprop - use this.
 	bool skipBackProp = false;
 };
 
@@ -165,10 +221,20 @@ public:
 	void Backward(const float *prev_data, const float *next_gradient) override;
 };
 
-// Convolutional image layer.
-class ConvLayer : public Layer {
+// Always factor 2 for now.
+class MaxPoolLayer : public Layer {
 public:
-	ConvLayer(NeuralNetwork *network) : Layer(network) {}
+	MaxPoolLayer(NeuralNetwork *network) : Layer(network) { type = LayerType::MAXPOOL; }
+	~MaxPoolLayer() {
+		delete[] maxIndex;
+	}
+
+	void Initialize() override;
 	void Forward(const float *input) override;
 	void Backward(const float *prev_data, const float *next_gradient) override;
+
+	Dim inputDim;
+	Dim outputDim;  // We only pool in X,Y directions so depth will be the same.
+
+	uint8_t *maxIndex;  // In each 2x2 element, cache which index was the max to avoid recomputation.
 };
