@@ -238,6 +238,14 @@ void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size)
 	}
 }
 
+void BytesToFloat(float *a, const uint8_t *b, size_t size, float scale, float offset) {
+	for (int x = 0; x < size; x++) {
+		uint8_t val = ((const uint8_t *)b)[x];
+		float v = (float)val * scale + offset;
+		a[x] = v;
+	}
+}
+
 // argmin(data[i], i)
 int FindMinIndex(const float *data, size_t size) {
 	float minValue = INFINITY;

@@ -10,10 +10,6 @@ struct ivec3 {
 	int x, y, z;
 };
 
-inline float ByteToFloat(uint8_t b) {
-	return (float)b * (1.0f / 255.0f);
-}
-
 inline float Sigmoid(float f) {
 	return 1.0f / (1.0f + expf(-f));
 }
@@ -39,6 +35,7 @@ void AccumulateScaledVector(float *sum, const float *a, float factorA, size_t si
 void AccumulateScaledVectors(float *sum, const float *a, float factorA, const float *b, float factorB, size_t size);
 void ScaleInPlace(float *a, float factor, size_t size);
 void ClampDownToZero(float *a, const float *b, size_t size);
+void BytesToFloat(float *a, const uint8_t *b, size_t size, float scale, float offset);
 
 // LAPACK stuff
 void SaxpyAVX(size_t size, float a, const float *x, float *y);

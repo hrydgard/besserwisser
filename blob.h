@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 struct Dim {
 	int count = 1;
 	int depth, height, width;
@@ -13,15 +15,32 @@ struct Dim {
 };
 
 enum class DataType {
+	UINT8_T_SCALED,
 	FLOAT32,
 };
 
 struct Blob {
 	~Blob() {
-		delete[] data;
+		switch (type) {
+		case DataType::FLOAT32:
+			delete[](float*)data;
+		default:
+			assert(false);
+			break;
+		}
 	}
+	const float *GetFloatPtr() const {
+		assert(type == DataType::FLOAT32);
+		return (const float *)data;
+	}
+	void CopyToFloat(float *output) const;
+
 	DataType type = DataType::FLOAT32;
-	float *data = nullptr;
+	void *data = nullptr;
 	size_t size = 0;
 	Dim dim;
+
+	// For quantized data.
+	float scale = 1.0f;
+	float offset = 0.0f;
 };

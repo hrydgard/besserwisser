@@ -22,10 +22,8 @@ std::vector<Blob> LoadMNISTImages(std::string path) {
 		Blob &image = images[i];
 		fread(temp, 1, rows*cols, f);
 		image.data = new float[rows * cols + 1];
-		for (int j = 0; j < rows*cols; j++) {
-			image.data[j] = ByteToFloat(temp[j]);
-		}
-		image.data[rows * cols] = 1.0f;  // Bias trick
+		BytesToFloat((float *)image.data, temp, rows * cols, 1.0f / 255.0f, 0.0f);
+		((float *)image.data)[rows * cols] = 1.0f;  // Bias trick
 		image.size = rows * cols + 1;
 		image.dim = { 1, cols, rows };
 	}

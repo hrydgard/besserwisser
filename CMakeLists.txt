@@ -14,6 +14,8 @@ set(FILES
   network.h
   train.cpp
   train.h
+  blob.cpp
+  blob.h
 )
 
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
