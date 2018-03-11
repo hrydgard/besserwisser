@@ -6,9 +6,11 @@ void ImageLayer::Initialize() {
 	data = new float[dataSize * count];
 }
 
-void ImageLayer::Forward(const float *input) {
-	assert(blob->size == dataSize);
-	blob->CopyToFloat(data);
+void ImageLayer::Forward(int miniBatchSize, const float *input) {
+	for (int n = 0; n < miniBatchSize; n++) {
+		assert(blobs[n]->size == dataSize);
+		blobs[n]->CopyToFloat(data);
+	}
 }
 
 void FcLayer::Initialize() {
@@ -20,8 +22,9 @@ void FcLayer::Initialize() {
 	GaussianNoise(weights, numWeights, network_->hyperParams.weightInitScale);
 }
 
-void FcLayer::Forward(const float *input) {
-	for (int n = 0; n < count; n++) {
+void FcLayer::Forward(int miniBatchSize, const float *input) {
+	assert(miniBatchSize <= count);
+	for (int n = 0; n < miniBatchSize; n++) {
 		// Just a matrix*vector multiplication.
 		for (int y = 0; y < dataSize; y++) {
 			data[n * dataSize + y] = DotAVX(input, &weights[y * inputSize], inputSize);
@@ -29,11 +32,12 @@ void FcLayer::Forward(const float *input) {
 	}
 }
 
-void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
+void FcLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
+	assert(miniBatchSize <= count);
 	float regStrength = network_->hyperParams.regStrength;
 
 	// Partial derivative dL/dx.
-	for (int n = 0; n < count; n++) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		for (int y = 0; y < dataSize; y++) {
 			int offset = y * inputSize;
 
@@ -52,10 +56,10 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 	if (skipBackProp)
 		return;
 
-	for (int x = 0; x < count * inputSize; x++) {
+	for (int x = 0; x < miniBatchSize * inputSize; x++) {
 		gradient[x] = 0.0f;
 	}
-	for (int n = 0; n < count; n++) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		// We also need to back propagate the gradient through.
 		// NOTE: We should be able to skip this if the previous layer is an image (or first!)!
 		for (int y = 0; y < dataSize; y++) {
@@ -68,7 +72,7 @@ void FcLayer::Backward(const float *prev_data, const float *next_gradient) {
 
 float FcLayer::GetRegularizationLoss() {
 	// Simple L2 norm.
-	// The derivative is used in Backward() so if you change this,
+	// The derivative is used in Backward(int miniBatchSize, ) so if you change this,
 	// gotta change there too.
 	// for (int i = 0; i < numWeights; i++)
 	//   sum += sqr(weights[i]);
@@ -117,40 +121,46 @@ void ConvLayer::Initialize() {
 	GaussianNoise(weights, numWeights, network_->hyperParams.weightInitScale);
 }
 
-void ConvLayer::Forward(const float *input) {
+void ConvLayer::Forward(int miniBatchSize, const float *input) {
+	assert(miniBatchSize <= count);
+
 	int border2 = (kernelDim.width - 1) / 2;
 	// 3D convolution. This is gonna be slow. And need a lot of vectorization.
 	int kernelPitch = kernelDim.TotalSize();
 
-	for (int z = 0; z < outputDim.depth; z++) {
-		// For each neuron:
-		// Do a 2D by 3D correlation. That is, convolve all layers
-		// with the kernel for this neuron to produce an output layer.
-		for (int y = 0; y < inputDim.height - kernelDim.height + 1; y++) {
-			for (int x = 0; x < inputDim.width - kernelDim.width + 1; x++) {
-				float sum = 0.0f;
-				for (int c = 0; c < kernelDim.depth; c++) {
-					for (int b = 0; b < kernelDim.height; b++) {
-						for (int a = 0; a < kernelDim.width; a++) {
-							int inputIndex = inputDim.GetIndex(x + a, y + b, z + c);
-							int weightIndex = kernelDim.GetIndex(a, b, c);
-							sum += weights[weightIndex] * input[inputIndex];
+	for (int n = 0; n < miniBatchSize; n++) {
+		for (int z = 0; z < outputDim.depth; z++) {
+			// For each neuron:
+			// Do a 2D by 3D correlation. That is, convolve all layers
+			// with the kernel for this neuron to produce an output layer.
+			for (int y = 0; y < inputDim.height - kernelDim.height + 1; y++) {
+				for (int x = 0; x < inputDim.width - kernelDim.width + 1; x++) {
+					float sum = 0.0f;
+					for (int c = 0; c < kernelDim.depth; c++) {
+						for (int b = 0; b < kernelDim.height; b++) {
+							for (int a = 0; a < kernelDim.width; a++) {
+								int inputIndex = inputDim.GetIndex(x + a, y + b, z + c);
+								int weightIndex = kernelDim.GetIndex(a, b, c);
+								sum += weights[weightIndex] * input[inputIndex];
+							}
 						}
 					}
+					int outputIndex = outputDim.GetIndex(x, y, z);
+					data[outputIndex] = sum;
 				}
-				int outputIndex = outputDim.GetIndex(x, y, z);
-				data[outputIndex] = sum;
 			}
 		}
 	}
 }
 
-void ConvLayer::Backward(const float *prev_data, const float *next_gradient) {
+void ConvLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
+	assert(miniBatchSize <= count);
+
 	int border2 = (kernelDim.width - 1) / 2;
 	// 3D convolution. This is gonna be slow. And need a lot of vectorization.
 	int kernelPitch = kernelDim.TotalSize();
 
-	for (int n = 0; n < count; n++) {
+	for (int n = 0; n < miniBatchSize; n++) {
 
 		// First, update the training gradients.
 		for (int z = 0; z < outputDim.depth; z++) {
@@ -185,7 +195,7 @@ void ConvLayer::Backward(const float *prev_data, const float *next_gradient) {
 
 float ConvLayer::GetRegularizationLoss() {
 	// Simple L2 norm.
-	// The derivative is used in Backward() so if you change this,
+	// The derivative is used in Backward(int miniBatchSize, ) so if you change this,
 	// gotta change there too.
 	// for (int i = 0; i < numWeights; i++)
 	//   sum += sqr(weights[i]);
@@ -218,8 +228,10 @@ void LossLayer::Initialize() {
 	gradient = new float[inputSize * count] {};
 }
 
-void SVMLossLayer::Forward(const float *input) {
-	for (int n = 0; n < count; n++) {
+void SVMLossLayer::Forward(int miniBatchSize, const float *input) {
+	assert(miniBatchSize <= count);
+
+	for (int n = 0; n < miniBatchSize; n++) {
 		assert(labels[n] != -1);
 		float sum = 0.0f;
 		for (size_t i = 0; i < inputSize; i++) {
@@ -231,7 +243,8 @@ void SVMLossLayer::Forward(const float *input) {
 	}
 }
 
-void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) {
+void SVMLossLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
+	assert(miniBatchSize <= count);
 	// There's no input gradient, we compute the original dL/dz gradient.
 	assert(!next_gradient);
 
@@ -240,7 +253,7 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 	// with respect to each row.
 	// The "correct" level is involved in all the rows so it needs a summing loop,
 	// while the others can be computed directly.
-	for (int n = 0; n < count; n++) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		int positive_count = 0;
 		for (size_t i = 0; i < inputSize; i++) {
 			if (i != labels[n])
@@ -257,8 +270,8 @@ void SVMLossLayer::Backward(const float *prev_data, const float *next_gradient) 
 	}
 }
 
-void SoftMaxLossLayer::Forward(const float *input) {
-	for (int n = 0; n < count; n++) {
+void SoftMaxLossLayer::Forward(int miniBatchSize, const float *input) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		float expSum = 0.0f;
 		for (size_t i = 0; i < inputSize; i++) {
 			expSum += expf(input[n * inputSize + i]);
@@ -267,14 +280,14 @@ void SoftMaxLossLayer::Forward(const float *input) {
 	}
 }
 
-void SoftMaxLossLayer::Backward(const float *prev_data, const float *next_gradient) {
+void SoftMaxLossLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
 	// There's no input gradient, we compute the original dL/dz gradient.
 	assert(!next_gradient);
 
 	// http://cs231n.github.io/neural-networks-case-study/#together
 	// For simplicity, partially recompute the forward pass. This code isn't the bottleneck.
 
-	for (int n = 0; n < count; n++) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		float expSum = 0.0f;
 		for (size_t i = 0; i < inputSize; i++) {
 			expSum += expf(prev_data[i + n * inputSize]);
@@ -291,52 +304,52 @@ void ActivationLayer::Initialize() {
 	gradient = new float[inputSize * count] {};
 }
 
-void SigmoidLayer::Forward(const float *input) {
-	for (int i = 0; i < count * dataSize; i++) {
+void SigmoidLayer::Forward(int miniBatchSize, const float *input) {
+	for (int i = 0; i < miniBatchSize * dataSize; i++) {
 		data[i] = Sigmoid(input[i]);
 	}
 }
 
-void SigmoidLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (int i = 0; i < count * dataSize; i++) {
+void SigmoidLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
+	for (int i = 0; i < miniBatchSize * dataSize; i++) {
 		gradient[i] = (1.0f - data[i]) * data[i] * next_gradient[i];
 	}
 }
 
-void ReluLayer::Forward(const float *input) {
-	for (int n = 0; n < count; n++) {
+void ReluLayer::Forward(int miniBatchSize, const float *input) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		// for (int i = 0; i < numData; i++)
 		//   data[i] = std::max(0.0f, input[i]);
 		ClampDownToZero(data + n * dataSize, input + n * inputSize, dataSize);
 	}
 }
 
-void ReluLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (int i = 0; i < dataSize * count; i++) {
+void ReluLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
+	for (int i = 0; i < dataSize * miniBatchSize; i++) {
 		gradient[i] = prev_data[i] > 0.0f ? next_gradient[i] : 0.0f;
 	}
 }
 
-void LeakyReluLayer::Forward(const float *input) {
-	for (int i = 0; i < dataSize * count; i++)
+void LeakyReluLayer::Forward(int miniBatchSize, const float *input) {
+	for (int i = 0; i < dataSize * miniBatchSize; i++)
 		data[i] = std::max(coef * input[i], input[i]);
 }
 
-void LeakyReluLayer::Backward(const float *prev_data, const float *next_gradient) {
-	for (int i = 0; i < dataSize * count; i++) {
+void LeakyReluLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
+	for (int i = 0; i < dataSize * miniBatchSize; i++) {
 		gradient[i] = prev_data[i] > 0.0f ? next_gradient[i] : next_gradient[i] * coef;
 	}
 }
 
-void Relu6Layer::Forward(const float *input) {
+void Relu6Layer::Forward(int miniBatchSize, const float *input) {
 	// TODO: This can be very easily SIMD'd.
-	for (int i = 0; i < dataSize * count; i++) {
+	for (int i = 0; i < dataSize * miniBatchSize; i++) {
 		data[i] = std::max(0.0f, std::min(input[i], 6.0f));
 	}
 }
 
-void Relu6Layer::Backward(const float *prev_data, const float *input) {
-	for (int i = 0; i < dataSize * count; i++) {
+void Relu6Layer::Backward(int miniBatchSize, const float *prev_data, const float *input) {
+	for (int i = 0; i < dataSize * miniBatchSize; i++) {
 		gradient[i] = data[i] > 6.0f ? 0.0f : (data[i] > 0.0f ? input[i] : 0.0f);
 	}
 }
@@ -349,8 +362,8 @@ void MaxPoolLayer::Initialize() {
 	assert(inputDim.depth == outputDim.depth);
 }
 
-void MaxPoolLayer::Forward(const float *input) {
-	for (int n = 0; n < count; n++) {
+void MaxPoolLayer::Forward(int miniBatchSize, const float *input) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		for (int z = 0; z < outputDim.depth; z++) {
 			for (int y = 0; y < outputDim.height; y++) {
 				for (int x = 0; x < outputDim.width; x++) {
@@ -378,12 +391,12 @@ void MaxPoolLayer::Forward(const float *input) {
 	}
 }
 
-void MaxPoolLayer::Backward(const float *prev_data, const float *next_gradient) {
+void MaxPoolLayer::Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) {
 	const int offsets[4] = {
 		0, 1,
 		inputDim.width, inputDim.width + 1
 	};
-	for (int n = 0; n < count; n++) {
+	for (int n = 0; n < miniBatchSize; n++) {
 		for (int z = 0; z < outputDim.depth; z++) {
 			for (int y = 0; y < outputDim.height; y++) {
 				for (int x = 0; x < outputDim.width; x++) {

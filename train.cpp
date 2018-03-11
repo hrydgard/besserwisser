@@ -12,10 +12,12 @@ float ComputeDataLoss(NeuralNetwork &network, const DataSet &dataSet, int index,
 	Layer *finalLayer = network.layers.back();
 	// Last layer must be a loss layer.
 	assert(finalLayer->type == LayerType::SVM_LOSS || finalLayer->type == LayerType::SOFTMAX_LOSS);
-	((ImageLayer *)network.layers[0])->blob = &dataSet.images[index];
+
+	const Blob *blob = &dataSet.images[index];
+	((ImageLayer *)network.layers[0])->blobs = &blob;
 	int label = dataSet.labels[index];
 	((LossLayer *)finalLayer)->labels = &label;
-	network.RunForwardPass();
+	network.RunForwardPass(1);
 	return finalLayer->data[0];
 }
 
@@ -87,16 +89,17 @@ static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBa
 
 // Trains all the weights in a network by running both a forward and a backward pass for every item
 // in the minibatch. Hyperparameters for training are configured directly on the network object.
-static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed) {
+static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed, int miniBatchSize) {
+	assert(miniBatchSize <= network.hyperParams.maxMiniBatchSize);
 	network.ClearDeltaWeightSum();
-	for (auto index : subset.indices) {
-		((ImageLayer *)network.layers[0])->blob = &subset.dataSet->images[index];
+
+	for (int i = 0; i < subset.indices.size(); i++) {
+		((ImageLayer *)network.layers[0])->blobs = subset.blobs + i;
 		LossLayer *finalLayer = (LossLayer *)network.layers.back();
 		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
-		int label = subset.dataSet->labels[index];
-		finalLayer->labels = &label;
-		network.RunForwardPass();
-		network.RunBackwardPass();  // Accumulates delta weights
+		finalLayer->labels = subset.labels + i;
+		network.RunForwardPass(1);
+		network.RunBackwardPass(1);  // Accumulates delta weights
 	}
 
 	// Update all training weights.
@@ -122,22 +125,21 @@ static void TrainLayerBruteForce(NeuralNetwork &network, const MiniBatch &subset
 	delete[] gradient;
 }
 
-
 bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet &dataSet) {
 	MiniBatch subset;
 	subset.dataSet = &dataSet;
 	subset.indices = { 1, 2 };
+	subset.Extract();
 	// Run the network first forward then backwards, then compute the brute force gradient and compare.
 	printf("Fast gradient (b)...\n");
 	network.ClearDeltaWeightSum();
-	for (auto index : subset.indices) {
-		((ImageLayer *)network.layers[0])->blob = &subset.dataSet->images[index];
+	for (size_t i = 0; i < subset.indices.size(); i++) {
+		((ImageLayer *)network.layers[0])->blobs = subset.blobs + i;
 		LossLayer *finalLayer = (LossLayer *)network.layers.back();
 		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
-		int label = subset.dataSet->labels[index];
-		finalLayer->labels = &label;
-		network.RunForwardPass();
-		network.RunBackwardPass();  // Accumulates delta weights.
+		finalLayer->labels = subset.labels + i;
+		network.RunForwardPass(1);
+		network.RunBackwardPass(1);  // Accumulates delta weights.
 	}
 	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
 
@@ -152,10 +154,10 @@ bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet
 	return true;  // probably ok.
 }
 
-void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs) {
+void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs, int miniBatchSize) {
+	assert(miniBatchSize <= network.hyperParams.maxMiniBatchSize);
 	float trainingSpeed = network.hyperParams.trainingSpeed;
 
-	int subsetSize = network.hyperParams.miniBatchSize;
 	MiniBatch testSubset;
 	testSubset.dataSet = &testSet;
 	testSubset.indices = GetFullSet(testSubset.dataSet->images.size());
@@ -166,7 +168,7 @@ void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &tr
 	for (int epoch = 0; epoch < maxEpochs; epoch++) {
 		// Generate a new bunch of subsets for each epoch. We could also do fun things
 		// like example augmentation (distorting images, etc).
-		subsets = GenerateRandomSubsets(trainingSet.images.size(), subsetSize);
+		subsets = GenerateRandomSubsets(trainingSet.images.size(), miniBatchSize);
 
 		// Decay training speed every N epochs. Tunable through network.hyperParams.
 		if (epoch != 0 && (epoch % network.hyperParams.trainingEpochsSlowdown == 0))
@@ -178,12 +180,13 @@ void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &tr
 			subset.dataSet = &trainingSet;
 			// Train on different subsets each round (stochastic gradient descent)
 			subset.indices = subsets[i];
+			subset.Extract();
 
 			// printf("Round %d/%d (subset %d/%d)\n", i + 1, rounds, subsetIndex + 1, (int)subsets.size());
 			//float loss = ComputeLossOverSubset(network, subset);
 
 			// TrainLayerBruteForce(network, subset, &linearLayer, trainingSpeed);
-			TrainNetworkOnMinibatch(network, subset, trainingSpeed);
+			TrainNetworkOnMinibatch(network, subset, trainingSpeed, subset.indices.size());
 			// UpdateLayerFast(network, subset, &linearLayer, trainingSpeed);
 			/*
 			stats = {};

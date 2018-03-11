@@ -59,7 +59,7 @@ int RunMnist(int argc, const char *argv[]) {
 
 	NeuralNetwork network;
 	network.hyperParams.regStrength = 0.001f;
-	network.hyperParams.miniBatchSize = 32;
+	network.hyperParams.maxMiniBatchSize = 32;
 	network.hyperParams.weightInitScale = 0.05f;
 
 	ImageLayer imageLayer(&network);
@@ -121,7 +121,8 @@ int RunMnist(int argc, const char *argv[]) {
 #endif
 
 	// TODO: Add support for separated dev and test sets if available (or generate them).
-	TrainAndEvaluateNetworkStochastic(network, trainingSet, testSet);
+
+	TrainAndEvaluateNetworkStochastic(network, trainingSet, testSet, 100, 32);
 	return 0;
 }
 

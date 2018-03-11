@@ -35,8 +35,8 @@ public:
 	}
 
 	virtual void Initialize() {}
-	virtual void Forward(const float *input) = 0;   // input = The neurons from the previous layer
-	virtual void Backward(const float *prev_data, const float *next_gradient) = 0;  // input = The gradients from the next layer
+	virtual void Forward(int miniBatchSize, const float *input) = 0;   // input = The neurons from the previous layer
+	virtual void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) = 0;  // input = The gradients from the next layer
 
 	virtual void ClearDeltaWeightSum() {}
 	virtual void ScaleDeltaWeightSum(float factor) {}
@@ -71,23 +71,23 @@ public:
 class SigmoidLayer : public ActivationLayer {
 public:
 	SigmoidLayer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::SIGMOID; }
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 };
 
 // Simple RELU activation. No max.
 class ReluLayer : public ActivationLayer {
 public:
 	ReluLayer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::RELU; }
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 };
 
 class LeakyReluLayer : public ActivationLayer {
 public:
 	LeakyReluLayer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::RELU; }
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 	float coef = 0.01f;
 };
 
@@ -95,26 +95,26 @@ public:
 class Relu6Layer : public ActivationLayer {
 public:
 	Relu6Layer(NeuralNetwork *network) : ActivationLayer(network) { type = LayerType::RELU6; }
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 };
 
 class InputLayer : public Layer {
 public:
 	InputLayer(NeuralNetwork *network) : Layer(network) {}
-	void Forward(const float *input) override {}
-	void Backward(const float *prev_data, const float *next_gradient) override {}
+	void Forward(int miniBatchSize, const float *input) override {}
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override {}
 };
 
 class ImageLayer : public InputLayer {
 public:
 	ImageLayer(NeuralNetwork *network) : InputLayer(network) { type = LayerType::IMAGE; }
 
-	const Blob *blob;
+	const Blob **blobs;
 
 	void Initialize();
 	// Unpacks the example image from the dataset.
-	void Forward(const float *input) override;
+	void Forward(int miniBatchSize, const float *input) override;
 };
 
 // Fully connected neural layer.
@@ -131,8 +131,8 @@ public:
 
 	void Initialize() override;
 
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 
 	void ClearDeltaWeightSum() override;
 	void ScaleDeltaWeightSum(float factor) override;
@@ -162,8 +162,8 @@ public:
 	}
 
 	void Initialize() override;
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 
 	// TODO: Share these with FcLayer (common base class TrainableLayer?)
 	void ClearDeltaWeightSum() override;
@@ -203,16 +203,16 @@ public:
 class SVMLossLayer : public LossLayer {
 public:
 	SVMLossLayer(NeuralNetwork *network) : LossLayer(network) { type = LayerType::SVM_LOSS; }
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 };
 
 // What this computes is more correctly known as "Cross entropy loss"
 class SoftMaxLossLayer : public LossLayer {
 public:
 	SoftMaxLossLayer(NeuralNetwork *network) : LossLayer(network) { type = LayerType::SOFTMAX_LOSS; }
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 };
 
 // Always factor 2 for now.
@@ -224,8 +224,8 @@ public:
 	}
 
 	void Initialize() override;
-	void Forward(const float *input) override;
-	void Backward(const float *prev_data, const float *next_gradient) override;
+	void Forward(int miniBatchSize, const float *input) override;
+	void Backward(int miniBatchSize, const float *prev_data, const float *next_gradient) override;
 
 	Dim inputDim;
 	Dim outputDim;  // We only pool in X,Y directions so depth will be the same.

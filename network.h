@@ -11,7 +11,7 @@ public:
 	struct HyperParams {
 		float regStrength = 0.01f;
 		float weightInitScale = 0.05f;
-		int miniBatchSize = 32;
+		int maxMiniBatchSize = 32;  // Determines the size of a lot of buffers.
 		float trainingSpeed = 0.015f;
 		int trainingEpochsSlowdown = 10;
 		float trainingSlowdownFactor = 0.75f;
@@ -21,12 +21,13 @@ public:
 	void InitializeNetwork();
 
 	// Inference
-	void RunForwardPass();
+	void RunForwardPass(int miniBatchSize);
 
 	// Training. Note that due to how accumulation of weights happen internally,
 	// we can't easily multithread this currently, will need some reorganization
 	// like having one accumulation buffer per thread.
-	void RunBackwardPass();
+	void RunBackwardPass(int miniBatchSize);
+
 	void ClearDeltaWeightSum();
 	void ScaleDeltaWeightSum(float factor);
 };

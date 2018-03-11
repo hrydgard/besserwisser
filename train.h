@@ -50,4 +50,4 @@ float ComputeLossOverMinibatch(NeuralNetwork &network, const MiniBatch &subset, 
 bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet &dataSet);
 
 // This is the normal way to train a classifier network in minibatches.
-void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &trainingSet, const DataSet &testSet, int maxEpochs = 100, int miniBatchSize = 32);
+void TrainAndEvaluateNetworkStochastic(NeuralNetwork &network, const DataSet &dataSet, const DataSet &testSet, int maxEpochs, int miniBatchSize);

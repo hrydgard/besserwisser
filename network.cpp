@@ -8,15 +8,15 @@ void NeuralNetwork::ClearDeltaWeightSum() {
 }
 
 // Inference.
-void NeuralNetwork::RunForwardPass() {
+void NeuralNetwork::RunForwardPass(int miniBatchSize) {
 	for (int i = 0; i < layers.size(); i++) {
-		layers[i]->Forward(i > 0 ? layers[i - 1]->data : nullptr);
+		layers[i]->Forward(miniBatchSize, i > 0 ? layers[i - 1]->data : nullptr);
 	}
 }
 
-void NeuralNetwork::RunBackwardPass() {
+void NeuralNetwork::RunBackwardPass(int miniBatchSize) {
 	for (int i = (int)layers.size() - 1; i >= 0; i--) {
-		layers[i]->Backward(
+		layers[i]->Backward(miniBatchSize,
 			i > 0 ? layers[i - 1]->data : 0,
 			(i < layers.size() - 1) ? layers[i + 1]->gradient : nullptr);
 	}
@@ -31,6 +31,7 @@ void NeuralNetwork::ScaleDeltaWeightSum(float factor) {
 void NeuralNetwork::InitializeNetwork() {
 	for (int i = 0; i < layers.size(); i++) {
 		Layer &layer = *layers[i];
+		layer.count = hyperParams.maxMiniBatchSize;
 		layer.Initialize();
 	}
 }
