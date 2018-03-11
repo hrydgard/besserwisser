@@ -2,15 +2,15 @@
 #include "math_util.h"
 
 void NeuralNetwork::ClearDeltaWeightSum() {
-	for (int i = 1; i < layers.size(); i++) {
+	for (int i = 0; i < layers.size(); i++) {
 		layers[i]->ClearDeltaWeightSum();
 	}
 }
 
 // Inference.
 void NeuralNetwork::RunForwardPass() {
-	for (int i = 1; i < layers.size(); i++) {
-		layers[i]->Forward(layers[i - 1]->data);
+	for (int i = 0; i < layers.size(); i++) {
+		layers[i]->Forward(i > 0 ? layers[i - 1]->data : nullptr);
 	}
 }
 
@@ -29,7 +29,7 @@ void NeuralNetwork::ScaleDeltaWeightSum(float factor) {
 }
 
 void NeuralNetwork::InitializeNetwork() {
-	for (int i = 1; i < layers.size(); i++) {
+	for (int i = 0; i < layers.size(); i++) {
 		Layer &layer = *layers[i];
 		layer.Initialize();
 	}

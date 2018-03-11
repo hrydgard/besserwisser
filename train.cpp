@@ -12,7 +12,7 @@ float ComputeDataLoss(NeuralNetwork &network, const DataSet &dataSet, int index,
 	Layer *finalLayer = network.layers.back();
 	// Last layer must be a loss layer.
 	assert(finalLayer->type == LayerType::SVM_LOSS || finalLayer->type == LayerType::SOFTMAX_LOSS);
-	network.layers[0]->data = (float *)dataSet.images[index].data;
+	((ImageLayer *)network.layers[0])->blob = &dataSet.images[index];
 	int label = dataSet.labels[index];
 	((LossLayer *)finalLayer)->labels = &label;
 	network.RunForwardPass();
@@ -90,7 +90,7 @@ static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBa
 static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed) {
 	network.ClearDeltaWeightSum();
 	for (auto index : subset.indices) {
-		network.layers[0]->data = (float *)subset.dataSet->images[index].data;
+		((ImageLayer *)network.layers[0])->blob = &subset.dataSet->images[index];
 		LossLayer *finalLayer = (LossLayer *)network.layers.back();
 		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
 		int label = subset.dataSet->labels[index];
@@ -131,7 +131,7 @@ bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet
 	printf("Fast gradient (b)...\n");
 	network.ClearDeltaWeightSum();
 	for (auto index : subset.indices) {
-		network.layers[0]->data = (float *)subset.dataSet->images[index].data;
+		((ImageLayer *)network.layers[0])->blob = &subset.dataSet->images[index];
 		LossLayer *finalLayer = (LossLayer *)network.layers.back();
 		assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
 		int label = subset.dataSet->labels[index];

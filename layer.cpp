@@ -2,6 +2,15 @@
 #include "network.h"
 #include "math_util.h"
 
+void ImageLayer::Initialize() {
+	data = new float[dataSize * count];
+}
+
+void ImageLayer::Forward(const float *input) {
+	assert(blob->size == dataSize);
+	blob->CopyToFloat(data);
+}
+
 void FcLayer::Initialize() {
 	data = new float[dataSize * count];
 	gradient = new float[inputSize * count]{};  // Input gradients for back propagation.

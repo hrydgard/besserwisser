@@ -16,18 +16,18 @@ std::vector<Blob> LoadMNISTImages(std::string path) {
 	std::vector<Blob> images(imageCount);
 	int rows = readBE32(f);
 	int cols = readBE32(f);
-	uint8_t *temp = new uint8_t[rows * cols];
 	double sum = 0.0;
 	for (int i = 0; i < imageCount; i++) {
 		Blob &image = images[i];
-		fread(temp, 1, rows*cols, f);
-		image.data = new float[rows * cols + 1];
-		BytesToFloat((float *)image.data, temp, rows * cols, 1.0f / 255.0f, 0.0f);
-		((float *)image.data)[rows * cols] = 1.0f;  // Bias trick
+		image.data = new uint8_t[rows * cols + 1];
+		fread(image.data, 1, rows*cols, f);
+		image.type = DataType::UINT8_T_SCALED;
+		image.scale = 1.0f / 255.0f;
+		image.offset = 0.0f;
+		((uint8_t *)image.data)[rows * cols] = 255;  // Bias trick
 		image.size = rows * cols + 1;
 		image.dim = { 1, cols, rows };
 	}
-	delete[] temp;
 	fclose(f);
 	return images;
 }

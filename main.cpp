@@ -115,7 +115,6 @@ int RunMnist(int argc, const char *argv[]) {
 
 #if 1
 	if (!RunBruteForceTest(network, testLayer, trainingSet)) {
-		network.layers[0]->data = nullptr;  // Don't want to autodelete this..
 		while (true);  // wait for Ctrl+C.
 		return 0;
 	}

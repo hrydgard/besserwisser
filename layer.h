@@ -110,8 +110,11 @@ class ImageLayer : public InputLayer {
 public:
 	ImageLayer(NeuralNetwork *network) : InputLayer(network) { type = LayerType::IMAGE; }
 
-	// Loads the next example image from the dataset.
-	void Forward(const float *input) override {}
+	const Blob *blob;
+
+	void Initialize();
+	// Unpacks the example image from the dataset.
+	void Forward(const float *input) override;
 };
 
 // Fully connected neural layer.
