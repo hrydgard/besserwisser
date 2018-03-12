@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <vector>
 #include <cmath>
+#include <cstdint>
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
@@ -55,7 +56,11 @@ inline float sqr(float x) {
 }
 
 inline uint32_t swap32(uint32_t x) {
+#ifdef _MSC_VER
 	return _byteswap_ulong(x);
+#else
+	return (x >> 24) | ((x >> 8) & 0xFF00) | ((x << 8) & 0xFF0000) | (x << 24);
+#endif
 }
 
 inline uint32_t readBE32(FILE *f) {

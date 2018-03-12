@@ -3,13 +3,17 @@
 
 #include "math_util.h"
 #include "blob.h"
+#include "mnist.h"
 
 std::vector<Blob> LoadMNISTImages(std::string path) {
 	FILE *f = fopen(path.c_str(), "rb");
-	if (!f)
-		throw;
+	if (!f) {
+		fprintf(stderr, "ERROR: Could not open '%s'\n", path.c_str());
+		return std::vector<Blob>();
+	}
 	uint32_t magic = readBE32(f);
 	if (magic != 0x803) {
+		fprintf(stderr, "Bad file format %08x (%s)\n", magic, path.c_str());
 		return std::vector<Blob>();
 	}
 	int imageCount = readBE32(f);
@@ -34,11 +38,14 @@ std::vector<Blob> LoadMNISTImages(std::string path) {
 
 std::vector<uint8_t> LoadMNISTLabels(std::string path) {
 	FILE *f = fopen(path.c_str(), "rb");
-	if (!f)
-		throw;
+	if (!f) {
+		fprintf(stderr, "ERROR: Could not open '%s'\n", path.c_str());
+		return std::vector<uint8_t>();
+	}
 	uint32_t magic = readBE32(f);
 	uint32_t count = readBE32(f);
 	if (magic != 0x801) {
+		fprintf(stderr, "Bad file format %08x (%s)\n", magic, path.c_str());
 		return std::vector<uint8_t>();
 	}
 	std::vector<uint8_t> data(count);

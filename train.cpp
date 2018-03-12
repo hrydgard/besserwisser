@@ -89,7 +89,7 @@ static void ComputeDeltaWeightSumBruteForce(NeuralNetwork &network, const MiniBa
 
 // Trains all the weights in a network by running both a forward and a backward pass for every item
 // in the minibatch. Hyperparameters for training are configured directly on the network object.
-static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed, int miniBatchSize) {
+static void TrainNetworkOnMinibatch(NeuralNetwork &network, const MiniBatch &subset, float speed, size_t miniBatchSize) {
 	assert(miniBatchSize <= network.hyperParams.maxMiniBatchSize);
 	network.ClearDeltaWeightSum();
 
@@ -137,13 +137,17 @@ bool RunBruteForceTest(NeuralNetwork &network, FcLayer *testLayer, const DataSet
 	LossLayer *finalLayer = (LossLayer *)network.layers.back();
 	assert(finalLayer->type == LayerType::SOFTMAX_LOSS || finalLayer->type == LayerType::SVM_LOSS);
 	finalLayer->labels = subset.labels + i;
+	printf("Running forward pass...\n");
 	network.RunForwardPass(subset.indices.size());
+	printf("Running backward pass...\n");
 	network.RunBackwardPass(subset.indices.size());  // Accumulates delta weights.
-
+	printf("Completed backward pass.\n");
 	network.ScaleDeltaWeightSum(1.0f / subset.indices.size());
 
+	assert(testLayer->numWeights > 0);
+
 	std::unique_ptr<float[]> deltaWeightSum(new float[testLayer->numWeights]{});
-	printf("Computing test delta weight over %d examples by brute force (a)...\n", (int)subset.indices.size());
+	printf("Brute forcing test delta weights over %d examples (a)...\n", (int)subset.indices.size());
 	ComputeDeltaWeightSumBruteForce(network, subset, testLayer, deltaWeightSum.get());
 	int diffCount = DiffVectors(deltaWeightSum.get(), testLayer->deltaWeightSum, testLayer->numWeights, 0.01f, 200);
 	printf("Done with test.\n");

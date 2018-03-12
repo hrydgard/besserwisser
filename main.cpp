@@ -37,8 +37,15 @@ int RunMnist(int argc, const char *argv[]) {
 	std::string mnist_root = "";
 	if (argc > 1)
 		mnist_root = std::string(argv[1]);
-	if (mnist_root.empty())
+
+	if (mnist_root.empty()) {
+		printf("Missing argument: Directory to MNIST data\n");
+#ifdef _MSC_VER
 		mnist_root = "C:/dev/MNIST";
+#else
+		return 1;
+#endif
+	}
 
 	// http://yann.lecun.com/exdb/mnist/
 	// The expected error rate for a pure linear classifier is 12% and we achieve that
@@ -50,12 +57,17 @@ int RunMnist(int argc, const char *argv[]) {
 	DataSet trainingSet;
 	trainingSet.images = LoadMNISTImages(mnist_root + "/train-images.idx3-ubyte");
 	trainingSet.labels = LoadMNISTLabels(mnist_root + "/train-labels.idx1-ubyte");
+	if (!trainingSet.images.size()) {
+		fprintf(stderr, "Unexpected: Empty training set\n");
+		return 1;
+	}
 	assert(trainingSet.images.size() == trainingSet.images.size());
 
 	DataSet testSet;
 	testSet.images = LoadMNISTImages(mnist_root + "/t10k-images.idx3-ubyte");
 	testSet.labels = LoadMNISTLabels(mnist_root + "/t10k-labels.idx1-ubyte");
 	assert(testSet.images.size() == testSet.images.size());
+	printf("Loaded MNIST.\n");
 
 	NeuralNetwork network;
 	network.hyperParams.regStrength = 0.001f;
@@ -116,6 +128,7 @@ int RunMnist(int argc, const char *argv[]) {
 
 #if 1
 	if (!RunBruteForceTest(network, testLayer, trainingSet)) {
+		fprintf(stderr, "Brute force test failed.\n");
 		while (true);  // wait for Ctrl+C.
 		return 0;
 	}
@@ -130,7 +143,7 @@ int RunMnist(int argc, const char *argv[]) {
 int main(int argc, const char *argv[]) {
 	printf("BesserWisser - a neural network implementation by Henrik Rydgård\n");
 	RunMnist(argc, argv);
+	printf("Done. Waiting for Ctrl+C...\n");
 	while (true);  // wait for Ctrl+C.
-	printf("Done.\n");
 	return 0;
 }

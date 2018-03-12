@@ -30,7 +30,10 @@ To build and run on Windows:
   * Choose x64-Release and to the right of that make sure to choose the right output to run.
   * Ctrl+F5
 
-To build on other platforms:
+To build and run on other platforms:
 
   * ```cmake .```
   * make
+  * ./besserwisser .
+
+(The first argument is the location of the MNIST data, without a trailing slash).

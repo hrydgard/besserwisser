@@ -21,12 +21,12 @@ public:
 	void InitializeNetwork();
 
 	// Inference
-	void RunForwardPass(int miniBatchSize);
+	void RunForwardPass(size_t miniBatchSize);
 
 	// Training. Note that due to how accumulation of weights happen internally,
 	// we can't easily multithread this currently, will need some reorganization
 	// like having one accumulation buffer per thread.
-	void RunBackwardPass(int miniBatchSize);
+	void RunBackwardPass(size_t miniBatchSize);
 
 	void ClearDeltaWeightSum();
 	void ScaleDeltaWeightSum(float factor);

@@ -1,4 +1,10 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
+
+# Build speedup
+set(CMAKE_C_COMPILER_WORKS 1)
+set(CMAKE_CXX_STANDARD 14)
+
+add_definitions(-mssse3)
 
 project (besserwisser)
  

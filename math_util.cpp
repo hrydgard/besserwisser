@@ -1,8 +1,9 @@
 #include <random>
+#include <algorithm>
 #include "math_util.h"
 #include <immintrin.h>
 
-#define USE_AVX
+// #define USE_AVX
 #define USE_SSE
 // #define USE_FMA
 
@@ -14,6 +15,7 @@ inline float HorizontalSum(__m128 v) {
 	return _mm_cvtss_f32(sums);
 }
 
+#if defined(USE_AVX)
 inline float HorizontalSum(__m256 v) {
 	float sumAVX = 0;
 	__m256 hsum = _mm256_hadd_ps(v, v);
@@ -21,6 +23,7 @@ inline float HorizontalSum(__m256 v) {
 	__m128 hsum128 = _mm_hadd_ps(_mm256_castps256_ps128(hsum), _mm256_castps256_ps128(hsum));
 	return _mm_cvtss_f32(hsum128);
 }
+#endif
 
 void ClampDownToZero(float *a, const float *b, size_t size) {
 #ifdef USE_AVX
@@ -30,6 +33,14 @@ void ClampDownToZero(float *a, const float *b, size_t size) {
 		a += 8;
 		b += 8;
 		size -= 8;
+	}
+#elif defined(USE_SSE)
+	__m128 zero = _mm_setzero_ps();
+	while (size >= 4) {
+		_mm_store_ps(a, _mm_max_ps(zero, _mm_load_ps(b)));
+		a += 4;
+		b += 4;
+		size -= 4;
 	}
 #endif
 	for (int i = 0; i < size; i++) {
@@ -102,6 +113,18 @@ float SumAVX(const float *a, size_t size) {
 		}
 		sum = HorizontalSum(_mm256_add_ps(sumWide1, sumWide2));
 	}
+#elif defined(USE_SSE)
+	if (size >= 8) {
+		__m128 sumWide1 = _mm_setzero_ps();
+		__m128 sumWide2 = _mm_setzero_ps();
+		while (size >= 8) {
+			sumWide1 = _mm_add_ps(sumWide1, _mm_loadu_ps(a));
+			sumWide2 = _mm_add_ps(sumWide2, _mm_loadu_ps(a + 4));
+			a += 8;
+			size -= 8;
+		}
+		sum = HorizontalSum(_mm_add_ps(sumWide1, sumWide2));
+	}
 #endif
 	for (size_t i = 0; i < size; i++) {
 		sum += a[i];
@@ -132,6 +155,27 @@ float SumSquaresAVX(const float *a, size_t size) {
 	} else {
 		sum = 0.0f;
 	}
+#elif defined(USE_SSE)
+	if (size >= 8) {
+		__m128 sumWide1 = _mm_setzero_ps();
+		__m128 sumWide2 = _mm_setzero_ps();
+		while (size >= 8) {
+			__m128 x = _mm_loadu_ps(a);
+			__m128 y = _mm_loadu_ps(a + 4);
+#if !defined(USE_FMA)
+			sumWide1 = _mm_add_ps(sumWide1, _mm_mul_ps(x, x));
+			sumWide2 = _mm_add_ps(sumWide2, _mm_mul_ps(y, y));
+#else
+			sumWide1 = _mm_fmadd_ps(x, x, sumWide1);
+			sumWide2 = _mm_fmadd_ps(y, y, sumWide2);
+#endif
+			a += 8;
+			size -= 8;
+		}
+		sum = HorizontalSum(_mm_add_ps(sumWide1, sumWide2));
+	} else {
+		sum = 0.0f;
+	}
 #endif
 	for (size_t i = 0; i < size; i++) {
 		float x = a[i];
@@ -150,6 +194,15 @@ void SaxpyAVX(size_t size, float a, const float *x, float *y) {
 		y += 8;
 		size -= 8;
 	}
+#elif defined(USE_SSE)
+	__m128 factor = _mm_set1_ps(a);
+	while (size >= 8) {
+		__m128 sum = _mm_add_ps(_mm_mul_ps(factor, _mm_load_ps(x)), _mm_load_ps(y));
+		_mm_store_ps(y, sum);
+		x += 4;
+		y += 4;
+		size -= 4;
+	}
 #endif
 	for (int i = 0; i < size; i++)
 		y[i] = a*x[i] + y[i];
@@ -165,6 +218,16 @@ void AccumulateScaledVector(float *d, const float *a, float factorA, size_t size
 		a += 8;
 		d += 8;
 		size -= 8;
+	}
+#elif defined(USE_SSE)
+	__m128 factorAwide = _mm_set1_ps(factorA);
+	while (size >= 4) {
+		__m128 prev = _mm_load_ps(d);
+		__m128 sum = _mm_mul_ps(factorAwide, _mm_load_ps(a));
+		_mm_store_ps(d, _mm_add_ps(prev, sum));
+		a += 4;
+		d += 4;
+		size -= 4;
 	}
 #endif
 	for (int i = 0; i < size; i++)
@@ -186,6 +249,20 @@ void AccumulateScaledVectors(float *d, const float *a, float factorA, const floa
 		d += 8;
 		size -= 8;
 	}
+#elif defined(USE_SSE)
+	__m128 factorAwide = _mm_set1_ps(factorA);
+	__m128 factorBwide = _mm_set1_ps(factorB);
+	while (size >= 8) {
+		__m128 prev = _mm_loadu_ps(d);
+		__m128 sum = _mm_add_ps(
+			_mm_mul_ps(factorAwide, _mm_loadu_ps(a)),
+			_mm_mul_ps(factorBwide, _mm_loadu_ps(b)));
+		_mm_storeu_ps(d, _mm_add_ps(prev, sum));
+		a += 4;
+		b += 4;
+		d += 4;
+		size -= 4;
+	}
 #endif
 	for (int i = 0; i < size; i++)
 		d[i] += factorA * a[i] + factorB * b[i];
@@ -199,6 +276,14 @@ void Accumulate(float *a, const float *b, size_t size) {
 		a += 8;
 		b += 8;
 		size -= 8;
+	}
+#elif defined(USE_SSE)
+	while (size >= 4) {
+		__m128 sum = _mm_add_ps(_mm_loadu_ps(a), _mm_loadu_ps(b));
+		_mm_store_ps(a, sum);
+		a += 4;
+		b += 4;
+		size -= 4;
 	}
 #endif
 	for (size_t i = 0; i < size; i++) {
@@ -214,6 +299,14 @@ void ScaleInPlace(float *a, float factor, size_t size) {
 		_mm256_store_ps(a, product);
 		a += 8;
 		size -= 8;
+	}
+#elif defined(USE_SSE)
+	__m128 factor8 = _mm_set_ps(factor, factor, factor, factor);
+	while (size >= 8) {
+		__m128 product = _mm_mul_ps(_mm_load_ps(a), factor8);
+		_mm_store_ps(a, product);
+		a += 4;
+		size -= 4;
 	}
 #endif
 	for (size_t i = 0; i < size; i++) {
@@ -231,6 +324,16 @@ void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size)
 		a += 8;
 		b += 8;
 		size -= 8;
+	}
+#elif defined(USE_SSE)
+	__m128 factor = _mm_set1_ps(scale);
+	while (size >= 4) {
+		__m128 bvalue = _mm_loadu_ps(b);
+		__m128 sum = _mm_add_ps(_mm_loadu_ps(a), _mm_mul_ps(factor, _mm_mul_ps(bvalue, bvalue)));
+		_mm_store_ps(a, sum);
+		a += 4;
+		b += 4;
+		size -= 4;
 	}
 #endif
 	for (size_t i = 0; i < size; i++) {
@@ -292,7 +395,9 @@ std::vector<std::vector<int>> GenerateRandomSubsets(size_t count, size_t setSize
 	for (int i = 0; i < count; i++) {
 		all.push_back(i);
 	}
-	std::random_shuffle(all.begin(), all.end());
+	std::random_device rd;
+	std::mt19937 g(rd());
+	std::shuffle(all.begin(), all.end(), g);
 
 	size_t setCount = count / setSize;
 	std::vector<std::vector<int>> sets(setCount);
