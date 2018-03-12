@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
 
-project (simplenet)
+project (besserwisser)
  
 set(FILES
   layer.cpp
@@ -20,4 +20,4 @@ set(FILES
 
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 
-add_executable(simplenet ${FILES})
+add_executable(besserwisser ${FILES})
