@@ -3,8 +3,22 @@
 #include "math_util.h"
 #include <immintrin.h>
 
-// #define USE_AVX
+#ifdef _MSC_VER
+#define USE_AVX
 #define USE_SSE
+#else
+#ifdef __AVX__
+#define USE_AVX
+#else
+#warning __AVX__ not defined
+#endif
+#ifdef __SSE__
+#define USE_SSE
+#else
+#warning __SSE__ not defined
+#endif
+#endif
+
 // #define USE_FMA
 
 inline float HorizontalSum(__m128 v) {
@@ -29,7 +43,7 @@ void ClampDownToZero(float *a, const float *b, size_t size) {
 #ifdef USE_AVX
 	__m256 zero = _mm256_setzero_ps();
 	while (size >= 8) {
-		_mm256_store_ps(a, _mm256_max_ps(zero, _mm256_load_ps(b)));
+		_mm256_storeu_ps(a, _mm256_max_ps(zero, _mm256_loadu_ps(b)));
 		a += 8;
 		b += 8;
 		size -= 8;
@@ -188,8 +202,8 @@ void SaxpyAVX(size_t size, float a, const float *x, float *y) {
 #if defined(USE_AVX)
 	__m256 factor = _mm256_set1_ps(a);
 	while (size >= 8) {
-		__m256 sum = _mm256_add_ps(_mm256_mul_ps(factor, _mm256_load_ps(x)), _mm256_load_ps(y));
-		_mm256_store_ps(y, sum);
+		__m256 sum = _mm256_add_ps(_mm256_mul_ps(factor, _mm256_loadu_ps(x)), _mm256_loadu_ps(y));
+		_mm256_storeu_ps(y, sum);
 		x += 8;
 		y += 8;
 		size -= 8;
@@ -212,9 +226,9 @@ void AccumulateScaledVector(float *d, const float *a, float factorA, size_t size
 #if defined(USE_AVX)
 	__m256 factorAwide = _mm256_set1_ps(factorA);
 	while (size >= 8) {
-		__m256 prev = _mm256_load_ps(d);
-		__m256 sum = _mm256_mul_ps(factorAwide, _mm256_load_ps(a));
-		_mm256_store_ps(d, _mm256_add_ps(prev, sum));
+		__m256 prev = _mm256_loadu_ps(d);
+		__m256 sum = _mm256_mul_ps(factorAwide, _mm256_loadu_ps(a));
+		_mm256_storeu_ps(d, _mm256_add_ps(prev, sum));
 		a += 8;
 		d += 8;
 		size -= 8;
@@ -239,11 +253,11 @@ void AccumulateScaledVectors(float *d, const float *a, float factorA, const floa
 	__m256 factorAwide = _mm256_set1_ps(factorA);
 	__m256 factorBwide = _mm256_set1_ps(factorB);
 	while (size >= 8) {
-		__m256 prev = _mm256_load_ps(d);
+		__m256 prev = _mm256_loadu_ps(d);
 		__m256 sum = _mm256_add_ps(
-			_mm256_mul_ps(factorAwide, _mm256_load_ps(a)),
-			_mm256_mul_ps(factorBwide, _mm256_load_ps(b)));
-		_mm256_store_ps(d, _mm256_add_ps(prev, sum));
+			_mm256_mul_ps(factorAwide, _mm256_loadu_ps(a)),
+			_mm256_mul_ps(factorBwide, _mm256_loadu_ps(b)));
+		_mm256_storeu_ps(d, _mm256_add_ps(prev, sum));
 		a += 8;
 		b += 8;
 		d += 8;
@@ -272,7 +286,7 @@ void Accumulate(float *a, const float *b, size_t size) {
 #if defined(USE_AVX)
 	while (size >= 8) {
 		__m256 sum = _mm256_add_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b));
-		_mm256_store_ps(a, sum);
+		_mm256_storeu_ps(a, sum);
 		a += 8;
 		b += 8;
 		size -= 8;
@@ -295,8 +309,8 @@ void ScaleInPlace(float *a, float factor, size_t size) {
 #if defined(USE_AVX)
 	__m256 factor8 = _mm256_set_ps(factor, factor, factor, factor, factor, factor, factor, factor);
 	while (size >= 8) {
-		__m256 product = _mm256_mul_ps(_mm256_load_ps(a), factor8);
-		_mm256_store_ps(a, product);
+		__m256 product = _mm256_mul_ps(_mm256_loadu_ps(a), factor8);
+		_mm256_storeu_ps(a, product);
 		a += 8;
 		size -= 8;
 	}
@@ -320,7 +334,7 @@ void AccumulateScaledSquares(float *a, const float *b, float scale, size_t size)
 	while (size >= 8) {
 		__m256 bvalue = _mm256_loadu_ps(b);
 		__m256 sum = _mm256_add_ps(_mm256_loadu_ps(a), _mm256_mul_ps(factor, _mm256_mul_ps(bvalue, bvalue)));
-		_mm256_store_ps(a, sum);
+		_mm256_storeu_ps(a, sum);
 		a += 8;
 		b += 8;
 		size -= 8;

@@ -5,6 +5,10 @@ set(CMAKE_C_COMPILER_WORKS 1)
 set(CMAKE_CXX_STANDARD 14)
 
 add_definitions(-mssse3)
+add_definitions(-mavx)
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -O2")
 
 project (besserwisser)
  

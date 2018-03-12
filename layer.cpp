@@ -60,7 +60,6 @@ void FcLayer::Backward(int miniBatchSize, const float *prev_data, const float *n
 	if (skipBackProp) {
 		return;
 	}
-
 	for (int x = 0; x < miniBatchSize * inputSize; x++) {
 		gradient[x] = 0.0f;
 	}

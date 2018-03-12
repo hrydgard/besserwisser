@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <memory>
 #include <cstdio>
+#include <immintrin.h>
 
 #include "math_util.h"
 #include "mnist.h"
@@ -139,6 +140,8 @@ int RunMnist(int argc, const char *argv[]) {
 	TrainAndEvaluateNetworkStochastic(network, trainingSet, testSet, 100, 32);
 	return 0;
 }
+
+float threes[8];
 
 int main(int argc, const char *argv[]) {
 	printf("BesserWisser - a neural network implementation by Henrik Rydgård\n");

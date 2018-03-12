@@ -71,7 +71,7 @@ inline uint32_t readBE32(FILE *f) {
 
 struct Tensor {
 	Tensor() : w(0), h(0), d(0), data(nullptr) {}
-	Tensor(int _w, int _h, int _d) : w(_w), h(_h), d(_d) {
+	Tensor(int _w, int _h, int _d) : w(_w), h(_h), d(_d), data(nullptr) {
 		data = new float[w * h * d];
 	}
 	~Tensor() {
@@ -80,10 +80,10 @@ struct Tensor {
 
 	void operator=(Tensor &&tensor) {
 		delete[] data;
-		data = tensor.data;
 		w = tensor.w;
 		h = tensor.h;
 		d = tensor.d;
+		data = tensor.data;
 	}
 	Tensor(Tensor&& tensor) noexcept : data(tensor.data), w(tensor.w), h(tensor.h), d(tensor.d) {}
 

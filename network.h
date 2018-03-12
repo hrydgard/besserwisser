@@ -11,7 +11,7 @@ public:
 	struct HyperParams {
 		float regStrength = 0.01f;
 		float weightInitScale = 0.05f;
-		int maxMiniBatchSize = 32;  // Determines the size of a lot of buffers.
+		size_t maxMiniBatchSize = 32;  // Determines the size of a lot of buffers.
 		float trainingSpeed = 0.015f;
 		int trainingEpochsSlowdown = 10;
 		float trainingSlowdownFactor = 0.75f;
